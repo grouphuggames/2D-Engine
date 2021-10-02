@@ -1,7 +1,0 @@
-gui_element_textured.glsl
-gi_image.png
-
-shader index, texture index, position, rotation, scale, verts[0].color, verts[1].color, verts[2].color, verts[3].color
-
-#Entity: 0, 0, -0.6 0.2, 0.0, 0.1 0.1, 0.0 1.0 0.0 1.0, 1.0 0.0 0.0 1.0, 0.0 0.0 1.0 1.0, 1.0 0.0 0.0 1.0
-#Entity: 0, 0, 0.8 0.8, 0.0, 0.1 0.1, 0.0 1.0 0.0 1.0, 1.0 0.0 0.0 1.0, 0.0 0.0 1.0 1.0, 1.0 0.0 0.0 1.0

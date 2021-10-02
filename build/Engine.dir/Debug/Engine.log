@@ -1,0 +1,3 @@
+﻿  main.cpp
+C:\2D-Engine\src\main.cpp(401,2): warning C4996: 'strcat': This function or variable may be unsafe. Consider using strcat_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  Engine.vcxproj -> C:\2D-Engine\build\Debug\Engine.exe

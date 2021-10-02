@@ -42,8 +42,8 @@ enum SUPER_TIME
 struct TimerInfo
 {
   SUPER_TIME time_scale;
-  std::chrono::time_point<std::chrono::system_clock> timer_start;
-  std::chrono::time_point<std::chrono::system_clock> timer_stop;
+  std::chrono::time_point<std::chrono::steady_clock> timer_start;
+  std::chrono::time_point<std::chrono::steady_clock> timer_stop;
   u32 time_delta;
 };
 
@@ -328,7 +328,7 @@ f32 last_frame = 0.f;
 
 std::string AssetPath(const char* path)
 {
-  std::string prefix = "../";
+  std::string prefix = "../../";
   return prefix.append(path);
 }
 
@@ -509,6 +509,12 @@ namespace en
       ++size;
     }
 
+    void Clear()
+    {
+      en::vector<T> tmp_vec;
+      *this = tmp_vec;
+    }
+
     s32 Size() const
     {
       return size;
@@ -532,12 +538,21 @@ en::vector<Entity> entities;
 en::vector<u32> scene_shaders;
 en::vector<u32> scene_textures;
 
-void LoadEmptyScene()
+en::vector<std::string> LoadSceneSelector()
 {
-  for (const auto& file : std::filesystem::directory_iterator("../"))
+  en::vector<std::string> result;
+  
+  for (const auto& file : std::filesystem::directory_iterator(AssetPath("")))
   {
-    std::cout << file.path() << '\n';
+    std::string file_path = file.path().string();
+    
+    if (file_path.find(".enscene") != std::string::npos)
+    {
+      result.PushBack(file_path);
+    }
   }
+
+  return result;
 }
 
 void LoadScene(const char* scene_path)
@@ -727,6 +742,8 @@ void LoadScene(const char* scene_path)
   }
 }
 
+en::vector<std::string> scene_names;
+
 s32 main()
 { 
   GLFWwindow* window;
@@ -742,8 +759,6 @@ s32 main()
   glfwSetMouseButtonCallback(window, MouseButtonCallback);
 
   glewInit();
-
-  //LoadScene("../test_scene.enscene");
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -796,7 +811,16 @@ s32 main()
     
     if (ImGui::Button("Load Scene"))
     {
-      LoadEmptyScene();
+      scene_names = LoadSceneSelector();
+    }
+
+    for (const auto& scene_name : scene_names)
+    {
+      if (ImGui::Button(scene_name.c_str()))
+      {
+        LoadScene(scene_name.c_str());
+        scene_names.Clear();
+      }
     }
     
     ImGui::End();

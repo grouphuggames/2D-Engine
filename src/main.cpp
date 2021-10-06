@@ -1,3 +1,5 @@
+// this will be the source code for the pong game inside of the engine
+
 #define GLEW_STATIC
 
 #include <iostream>

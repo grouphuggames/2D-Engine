@@ -1,0 +1,26 @@
+entity_textured.glsl
+entity_untextured.glsl
+0_texture.png
+1_texture.png
+2_texture.png
+3_texture.png
+4_texture.png
+5_texture.png
+6_texture.png
+7_texture.png
+*MainTheme.wav
+Hit.wav
+Score.wav
+
+#Entity: 1, -1, -0.8 0.0, 0.0, 0.01 0.1, 1.0 1.0 1.0 1.0
+#Entity: 1, -1, 0.8 0.0, 0.0, 0.01 0.1, 1.0 1.0 1.0 1.0
+
+#Entity: 1, -1, 0.0 1.0, 0.0, 1.0 0.01, 0.0 0.0 1.0 0.0
+#Entity: 1, -1, 0.0 -1.0, 0.0, 1.0 0.01, 0.0 0.0 1.0 0.0
+#Entity: 1, -1, -0.95 0.0, 0.0, 0.01 1.0, 1.0 0.0 1.0 0.0
+#Entity: 1, -1, 0.95 0.0, 0.0, 0.01 1.0, 0.0 0.0 1.0 0.0
+
+#Entity: 0, 0, -0.3 0.7, 0.0, 0.05 0.1, 1.0 1.0 1.0 1.0
+#Entity: 0, 0, 0.3 0.7, 0.0, 0.05 0.1, 1.0 1.0 1.0 1.0
+
+#Entity: 1, -1, 0.0 0.0, 0.0, 0.02 0.02, 1.0 0.0 0.0 1.0

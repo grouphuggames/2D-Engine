@@ -12,10 +12,9 @@
 #include <cmath>
 #include <string>
 #include <chrono>
+#include <random>
 #include <filesystem>
-#include "imgui.h"
-#include "imgui_impl_opengl3.h"
-#include "imgui_impl_glfw.h"
+#include "fmod.hpp"
 #include "stb_image.h"
 
 
@@ -27,7 +26,21 @@ using f64 = double;
 const s32 window_width = 1280;
 const s32 window_height = 720;
 
+const f32 aspect_ratio = (f32)window_width / (f32)window_height;
+
 const f64 PI = 3.14159;
+
+#define PADDLE_LEFT 0
+#define PADDLE_RIGHT 1
+#define BOUNDARY_TOP 2
+#define BOUNDARY_BOTTOM 3
+#define BOUNDARY_LEFT 4
+#define BOUNDARY_RIGHT 5
+#define SCORE_PLAYER_1 6
+#define SCORE_PLAYER_2 7
+#define PONG 8
+
+FMOD::System* audio_system;
 
 static inline f32 ToRadians(f32 degrees)
 {
@@ -82,6 +95,20 @@ void StopTimer(TimerInfo& info)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
 }
 
+f32 GetRandomFloat()
+{
+  std::mt19937 generator((u32)std::chrono::steady_clock::now().time_since_epoch().count());
+  std::uniform_real_distribution<f32> distribution(0.f, 1.f);
+  return distribution(generator);
+}
+
+f32 GetRandomFloatInRange(f32 lower, f32 upper)
+{
+  std::mt19937 generator((u32)std::chrono::steady_clock::now().time_since_epoch().count());
+  std::uniform_real_distribution<f32> distribution(lower, upper);
+  return distribution(generator);
+}
+
 struct vec2
 {
 public:
@@ -108,6 +135,49 @@ public:
   {
     return data[1];
   }
+
+  static f32 length(const vec2& vec)
+	{
+		return sqrtf(vec.x() * vec.x() + vec.y() * vec.y());
+	}
+
+	static vec2 normalize(const vec2& vec)
+	{
+		f32 k = length(vec);
+		return vec2(vec.x() / k, vec.y() / k);
+	}
+
+  friend vec2 operator*(const f32 left, const vec2& right)
+	{
+		return vec2(right.x() * left, right.y() * left);
+	}
+
+  friend vec2 operator/(const vec2& left, const f32 right)
+  {
+    return vec2(left.x() / right, left.y() / right);
+  }
+
+  friend vec2 operator+(const vec2& left, const vec2& right)
+	{
+		return vec2(left.x() + right.x(), left.y() + right.y());
+	}
+
+	friend vec2 operator-(const vec2& left, const vec2& right)
+	{
+		return vec2(left.x() - right.x(), left.y() - right.y());
+	}
+
+	vec2& operator+=(const vec2& other)
+	{
+		*this = *this + other;
+		return *this;
+	}
+
+	vec2& operator-=(const vec2& other)
+	{
+		*this = *this - other;
+		return *this;
+	}
 };
 
 void DebugPrintVec2(vec2 vec)
@@ -305,30 +375,51 @@ public:
   }
 };
 
+struct AABB
+{
+  vec2 position;
+  vec2 half_extents;
+};
+
+bool AABBAABBColliding(AABB a, AABB b)
+{
+  if (fabsf(a.position.x() - b.position.x()) > (a.half_extents.x() + b.half_extents.x()))  return false;
+  if (fabsf(a.position.y() - b.position.y()) > (a.half_extents.y() + b.half_extents.y()))  return false;
+
+  return true;
+};
+
 struct Vertex
 {
 public:
   vec2 position;
-  vec4 color;
 };
 
 struct Entity
 {
 public:
-  Vertex verts[4] = { { vec2(-1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(-1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) } };
+  Vertex verts[4] = { vec2(-1.f, 1.f), vec2(-1.f, -1.f), vec2(1.f, 1.f), vec2(1.f, -1.f) };
   vec2 position;
   vec2 scale;
+  vec4 color;
   u32 vao, vbo;
   u32 shader;
-  u32 texture;
+  s32 texture = -1;
   f32 angle = 0.f;
-  bool editor_selected = false;
+  AABB collision;
+  bool visible = true;
 };
 
 f32 delta_time = 0.f;
 f32 last_frame = 0.f;
 
 std::string AssetPath(const char* path)
+{
+  std::string prefix = "../../";
+  return prefix.append(path);
+}
+
+std::string AssetPath(std::string path)
 {
   std::string prefix = "../../";
   return prefix.append(path);
@@ -524,21 +615,10 @@ namespace en
   };
 }
 
-void MouseButtonCallback(GLFWwindow* window, s32 button, s32 action, s32 mods)
-{
-  if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-  {
-    f64 mouse_x, mouse_y;
-    glfwGetCursorPos(window, &mouse_x, &mouse_y);
-
-    mouse_x = 2.0 * (mouse_x / (f64)window_width) - 1.0;
-    mouse_y = 2.0 * (1.0 - (mouse_y / (f64)window_height)) - 1.0;
-  }
-}
-
 en::vector<Entity> entities;
 en::vector<u32> scene_shaders;
 en::vector<u32> scene_textures;
+en::vector<FMOD::Sound*> scene_sounds;
 
 en::vector<std::string> LoadSceneSelector()
 {
@@ -559,12 +639,18 @@ en::vector<std::string> LoadSceneSelector()
 
 void LoadScene(const char* scene_path)
 {
+  entities.Clear();
+  scene_shaders.Clear();
+  scene_textures.Clear();
+  scene_sounds.Clear();
+
   std::ifstream scene_stream(scene_path);
 
   std::string line;
 
   en::vector<std::string> scene_shader_names;
   en::vector<std::string> scene_texture_names;
+  en::vector<std::string> scene_sound_names;
 
   while (std::getline(scene_stream, line))
   {
@@ -575,6 +661,10 @@ void LoadScene(const char* scene_path)
     else if (line.find(".png") != std::string::npos)
     {
       scene_texture_names.PushBack(line);
+    }
+    else if (line.find(".wav") != std::string::npos)
+    {
+      scene_sound_names.PushBack(line);
     }
     else
     {
@@ -594,6 +684,41 @@ void LoadScene(const char* scene_path)
     scene_textures.PushBack(TextureFromFile(t_path.c_str()));
   }
 
+  for (const auto& s : scene_sound_names)
+  {
+    std::string s_path = s;
+    if (s_path.find("*") != std::string::npos)
+    {
+      auto star = s_path.find("*");
+      s_path.erase(star, 1);
+      std::cout << s_path << '\n';
+
+      FMOD::Sound* sound;
+      if (audio_system->createSound(AssetPath(s_path).c_str(), FMOD_DEFAULT | FMOD_LOOP_NORMAL, 0, &sound) == FMOD_OK)
+      {
+        std::cout << "Successfully loaded audio asset: " << s_path << '\n';
+        scene_sounds.PushBack(sound);
+      }
+      else
+      {
+        std::cout << "Failed to load audio asset: " << s_path << '\n';
+      }
+    }
+    else
+    {
+      FMOD::Sound* sound;
+      if (audio_system->createSound(AssetPath(s_path).c_str(), FMOD_DEFAULT, 0, &sound) == FMOD_OK)
+      {
+        std::cout << "Successfully loaded audio asset: " << s_path << '\n';
+        scene_sounds.PushBack(sound);
+      }
+      else
+      {
+        std::cout << "Failed to load audio asset: " << s_path << '\n';
+      }
+    }
+  }
+
   while (std::getline(scene_stream, line))
   {
     if (line.find("#Entity") != std::string::npos)
@@ -609,7 +734,10 @@ void LoadScene(const char* scene_path)
       new_line = new_line.substr(comma + 2);
       comma = new_line.find(",");
       val_str = new_line.substr(0, comma);
-      e.texture = scene_textures[std::stoi(val_str)];
+      if (std::stoi(val_str) >= 0)
+      {
+        e.texture = scene_textures[std::stoi(val_str)];
+      }
 
       new_line = new_line.substr(comma + 2);
       comma = new_line.find(",");
@@ -642,7 +770,7 @@ void LoadScene(const char* scene_path)
       space = val_str.find(" ");
       tmp_vec[1] = std::stof(val_str.substr(0, space));
 
-      e.scale = vec2(tmp_vec[0], tmp_vec[1]);
+      e.scale = vec2(tmp_vec[0], tmp_vec[1] * aspect_ratio);
 
       new_line = new_line.substr(comma + 2);
       comma = new_line.find(",");
@@ -665,73 +793,10 @@ void LoadScene(const char* scene_path)
       tmp_vec4[3] = std::stof(val_str.substr(0, space));
       val_str = val_str.substr(space + 1);
 
-      e.verts[0].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
+      e.color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
 
-      new_line = new_line.substr(comma + 2);
-      comma = new_line.find(",");
-      val_str = new_line.substr(0, comma);
-	
-      space = val_str.find(" ");
-      tmp_vec4[0] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[1] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[2] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[3] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      e.verts[1].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
-	
-      new_line = new_line.substr(comma + 2);
-      comma = new_line.find(",");
-      val_str = new_line.substr(0, comma);
-	
-      space = val_str.find(" ");
-      tmp_vec4[0] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[1] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[2] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[3] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      e.verts[2].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
-
-      new_line = new_line.substr(comma + 2);
-      comma = new_line.find(",");
-      val_str = new_line.substr(0, comma);
-	
-      space = val_str.find(" ");
-      tmp_vec4[0] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[1] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[2] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[3] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      e.verts[3].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
+      e.collision.position = e.position;
+      e.collision.half_extents = e.scale;
 
       glGenVertexArrays(1, &e.vao);
       glBindVertexArray(e.vao);
@@ -744,7 +809,33 @@ void LoadScene(const char* scene_path)
   }
 }
 
-en::vector<std::string> scene_names;
+void ProcessKeyboardInput(GLFWwindow* window)
+{
+  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)  glfwSetWindowShouldClose(window, true);
+
+  f32 movement_speed = 0.000001f * delta_time;
+  if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+  {
+    entities[PADDLE_LEFT].position += vec2(0.f, movement_speed);
+    entities[PADDLE_LEFT].collision.position = entities[PADDLE_LEFT].position;
+  }
+  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+  {
+    entities[PADDLE_LEFT].position -= vec2(0.f, movement_speed);
+    entities[PADDLE_LEFT].collision.position = entities[PADDLE_LEFT].position;
+  }
+
+  if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+  {
+    entities[PADDLE_RIGHT].position += vec2(0.f, movement_speed);
+    entities[PADDLE_RIGHT].collision.position = entities[PADDLE_RIGHT].position;
+  }
+  if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+  {
+    entities[PADDLE_RIGHT].position -= vec2(0.f, movement_speed);
+    entities[PADDLE_RIGHT].collision.position = entities[PADDLE_RIGHT].position;
+  }
+}
 
 s32 main()
 { 
@@ -758,29 +849,131 @@ s32 main()
   window = glfwCreateWindow(window_width, window_height, "Hello Window", NULL, NULL);
   
   glfwMakeContextCurrent(window);
-  glfwSetMouseButtonCallback(window, MouseButtonCallback);
+  glfwSwapInterval(1);
 
   glewInit();
 
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
-  ImGui::StyleColorsDark();
-
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
-  ImGui_ImplOpenGL3_Init((char*)glGetString(GL_NUM_SHADING_LANGUAGE_VERSIONS));
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   StartTimer(game_timer);
 
-  bool show_file_window = false;
+  FMOD::Channel* audio_channel0;
+  FMOD::Channel* audio_channel1;
+  FMOD::Channel* audio_channel2;
+  FMOD::System_Create(&audio_system);
+
+  audio_system->init(64, FMOD_INIT_NORMAL, 0);
+
+  LoadScene(AssetPath("pong.enscene").c_str());
+
+  vec2 pong_direction = vec2(GetRandomFloatInRange(-1.f, 1.f), GetRandomFloatInRange(-1.f, 1.f));
+  pong_direction = vec2::normalize(pong_direction);
+
+  s32 hits = 0;
+  f32 speed;
+
+  s32 player_1_score = 0;
+  s32 player_2_score = 0;
+
+  bool gameplay_active = true;
+
+  audio_system->playSound(scene_sounds[0], nullptr, false, &audio_channel0);
 
   while (!glfwWindowShouldClose(window))
   {
     glfwPollEvents();
     StartTimer(frame_timer);
 
-    glClearColor(1.f, 0.8f, 0.7f, 1.f);
+    glClearColor(0.f, 0.f, 0.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    if (gameplay_active)
+    {
+      ProcessKeyboardInput(window);
+
+      if (AABBAABBColliding(entities[PADDLE_LEFT].collision, entities[PONG].collision))
+      {
+        pong_direction = vec2(-1.f * pong_direction.x(), pong_direction.y());
+        audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channel1);
+        hits++;
+      }
+
+      if (AABBAABBColliding(entities[PADDLE_RIGHT].collision, entities[PONG].collision))
+      {
+        pong_direction = vec2(-1.f * pong_direction.x(), pong_direction.y());
+        audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channel1);
+        hits++;
+      }
+
+      if (AABBAABBColliding(entities[BOUNDARY_BOTTOM].collision, entities[PONG].collision))
+      {
+        pong_direction = vec2(pong_direction.x(), -1.f * pong_direction.y());
+        audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channel1);
+        hits++;
+      }
+
+      if (AABBAABBColliding(entities[BOUNDARY_TOP].collision, entities[PONG].collision))
+      {
+        pong_direction = vec2(pong_direction.x(), -1.f * pong_direction.y());
+        audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channel1);
+        hits++;
+      }
+
+      if (AABBAABBColliding(entities[BOUNDARY_LEFT].collision, entities[PONG].collision))
+      {
+        if (player_2_score < 6)
+        {
+          player_2_score++;
+          entities[SCORE_PLAYER_2].texture = scene_textures[player_2_score];
+
+          audio_system->playSound(scene_sounds[2], nullptr, false, &audio_channel2);
+
+          entities[PONG].position = vec2(0.f, 0.f);
+          entities[PONG].collision.position = vec2(0.f, 0.f);
+          pong_direction = vec2(GetRandomFloatInRange(-1.f, 1.f), GetRandomFloatInRange(-1.f, 1.f));
+          pong_direction = vec2::normalize(pong_direction);
+
+          hits /= 2;
+        }
+        else
+        {
+          gameplay_active = false;
+          audio_channel0->stop();
+          LoadScene(AssetPath("player_2_win.enscene").c_str());
+          audio_system->playSound(scene_sounds[0], nullptr, false, &audio_channel0);
+        }
+      }
+
+      if (AABBAABBColliding(entities[BOUNDARY_RIGHT].collision, entities[PONG].collision))
+      {
+        if (player_1_score < 6)
+        {
+          player_1_score++;
+          entities[SCORE_PLAYER_1].texture = scene_textures[player_1_score];
+
+          audio_system->playSound(scene_sounds[2], nullptr, false, &audio_channel2);
+
+          entities[PONG].position = vec2(0.f, 0.f);
+          entities[PONG].collision.position = vec2(0.f, 0.f);
+          pong_direction = vec2(GetRandomFloatInRange(-1.f, 1.f), GetRandomFloatInRange(-1.f, 1.f));
+          pong_direction = vec2::normalize(pong_direction);
+      
+          hits /= 2;
+        }
+        else
+        {
+          gameplay_active = false;
+          audio_channel0->stop();
+          LoadScene(AssetPath("player_1_win.enscene").c_str());
+          audio_system->playSound(scene_sounds[0], nullptr, false, &audio_channel0);
+        }
+      }
+
+      speed = 0.000001f + ((f32)hits * 0.00000005f);
+      entities[PONG].position += speed * delta_time * pong_direction;
+      entities[PONG].collision.position = entities[PONG].position;
+    }
 
     if (entities.Size() > 0)
     {
@@ -795,40 +988,19 @@ s32 main()
         glUniformMatrix4fv(glGetUniformLocation(e.shader, "transform"), 1, GL_FALSE, transform.elements);
         glBindVertexArray(e.vao);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)(sizeof(vec2)));
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, e.texture);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
+        if (e.texture >= 0)
+        {
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, e.texture);
+        }
+        else
+        {
+          glUniform4f(glGetUniformLocation(e.shader, "override_color"), e.color.x(), e.color.y(), e.color.z(), e.color.w());
+        }
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
       }
     }
-
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    // draw ui here
-    ImGui::Begin("Menu");
-    
-    if (ImGui::Button("Load Scene"))
-    {
-      scene_names = LoadSceneSelector();
-    }
-
-    for (const auto& scene_name : scene_names)
-    {
-      if (ImGui::Button(scene_name.c_str()))
-      {
-        LoadScene(scene_name.c_str());
-        scene_names.Clear();
-      }
-    }
-    
-    ImGui::End();
-
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     glfwSwapBuffers(window);
 
@@ -836,10 +1008,6 @@ s32 main()
     StopTimer(frame_timer);
     delta_time = frame_timer.time_delta / 1000.f;
   }
-
-  ImGui_ImplOpenGL3_Shutdown();
-  ImGui_ImplGlfw_Shutdown();
-  ImGui::DestroyContext();
 
   glfwDestroyWindow(window);
   glfwTerminate();

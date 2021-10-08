@@ -1,3 +1,5 @@
+// FLAPPY BIRD CLONE TIME
+
 #define GLEW_STATIC
 
 #include <iostream>

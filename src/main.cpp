@@ -12,6 +12,7 @@
 #include <cmath>
 #include <string>
 #include <chrono>
+#include <random>
 #include <filesystem>
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
@@ -24,8 +25,8 @@ using u32 = uint32_t;
 using f32  = float;
 using f64 = double;
 
-const s32 window_width = 1280;
-const s32 window_height = 720;
+const s32 window_width = 720;
+const s32 window_height = 1280;
 
 const f64 PI = 3.14159;
 
@@ -34,16 +35,31 @@ static inline f32 ToRadians(f32 degrees)
   return degrees * ((f32)PI / 180.f);
 }
 
-enum SUPER_TIME
+f32 GetRandomFloat()
+{
+  std::mt19937 generator((u32)std::chrono::steady_clock::now().time_since_epoch().count());
+  std::uniform_real_distribution<f32> distribution(0.f, 1.f);
+  return distribution(generator);
+}
+
+f32 GetRandomFloatInRange(f32 lower, f32 upper)
+{
+  std::mt19937 generator((u32)std::chrono::steady_clock::now().time_since_epoch().count());
+  std::uniform_real_distribution<f32> distribution(lower, upper);
+  return distribution(generator);
+}
+
+enum TIME
 {
   NANOSECOND,
   MICROSECOND,
-  MILLISECOND
+  MILLISECOND,
+  SECOND
 };
 
 struct TimerInfo
 {
-  SUPER_TIME time_scale;
+  TIME time_scale;
   std::chrono::time_point<std::chrono::steady_clock> timer_start;
   std::chrono::time_point<std::chrono::steady_clock> timer_stop;
   u32 time_delta;
@@ -62,11 +78,13 @@ u32 GetTimerValue(TimerInfo& info)
 {
   auto current_time = std::chrono::high_resolution_clock::now();
   if (info.time_scale == NANOSECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(info.timer_stop - info.timer_start).count();
+    return (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - info.timer_start).count();
   else if (info.time_scale == MICROSECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::microseconds>(info.timer_stop - info.timer_start).count();
+    return (u32)std::chrono::duration_cast<std::chrono::microseconds>(current_time - info.timer_start).count();
   else if (info.time_scale == MILLISECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
+    return (u32)std::chrono::duration_cast<std::chrono::milliseconds>(current_time - info.timer_start).count();
+    else if (info.time_scale == SECOND)
+    return (u32)std::chrono::duration_cast<std::chrono::seconds>(current_time - info.timer_start).count();
 
   return 0;
 }
@@ -80,6 +98,8 @@ void StopTimer(TimerInfo& info)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::microseconds>(info.timer_stop - info.timer_start).count();
   else if (info.time_scale == MILLISECOND)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
+    else if (info.time_scale == SECOND)
+    info.time_delta = (u32)std::chrono::duration_cast<std::chrono::seconds>(info.timer_stop - info.timer_start).count();
 }
 
 struct vec2
@@ -108,6 +128,49 @@ public:
   {
     return data[1];
   }
+
+  static f32 length(const vec2& vec)
+	{
+		return sqrtf(vec.x() * vec.x() + vec.y() * vec.y());
+	}
+
+	static vec2 normalize(const vec2& vec)
+	{
+		f32 k = length(vec);
+		return vec2(vec.x() / k, vec.y() / k);
+	}
+
+  friend vec2 operator*(const f32 left, const vec2& right)
+	{
+		return vec2(right.x() * left, right.y() * left);
+	}
+
+  friend vec2 operator/(const vec2& left, const f32 right)
+  {
+    return vec2(left.x() / right, left.y() / right);
+  }
+
+  friend vec2 operator+(const vec2& left, const vec2& right)
+	{
+		return vec2(left.x() + right.x(), left.y() + right.y());
+	}
+
+	friend vec2 operator-(const vec2& left, const vec2& right)
+	{
+		return vec2(left.x() - right.x(), left.y() - right.y());
+	}
+
+	vec2& operator+=(const vec2& other)
+	{
+		*this = *this + other;
+		return *this;
+	}
+
+	vec2& operator-=(const vec2& other)
+	{
+		*this = *this - other;
+		return *this;
+	}
 };
 
 void DebugPrintVec2(vec2 vec)
@@ -305,6 +368,20 @@ public:
   }
 };
 
+struct AABB
+{
+  vec2 position;
+  vec2 half_extents;
+};
+
+bool AABBAABBColliding(AABB a, AABB b)
+{
+  if (fabsf(a.position.x() - b.position.x()) > (a.half_extents.x() + b.half_extents.x()))  return false;
+  if (fabsf(a.position.y() - b.position.y()) > (a.half_extents.y() + b.half_extents.y()))  return false;
+
+  return true;
+}
+
 struct Vertex
 {
 public:
@@ -312,7 +389,7 @@ public:
   vec4 color;
 };
 
-struct Entity
+struct StaticEntity
 {
 public:
   Vertex verts[4] = { { vec2(-1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(-1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) } };
@@ -322,7 +399,25 @@ public:
   u32 shader;
   u32 texture;
   f32 angle = 0.f;
-  bool editor_selected = false;
+};
+
+struct DynamicEntity
+{
+public:
+  Vertex verts[4] = { { vec2(-1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(-1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) } };
+  vec2 position;
+  vec2 scale;
+  u32 vao, vbo;
+  u32 shader;
+  u32 texture;
+  f32 angle = 0.f;
+  AABB collision;
+};
+
+struct ScoreGate
+{
+public:
+  AABB collision;
 };
 
 f32 delta_time = 0.f;
@@ -536,7 +631,9 @@ void MouseButtonCallback(GLFWwindow* window, s32 button, s32 action, s32 mods)
   }
 }
 
-en::vector<Entity> entities;
+en::vector<StaticEntity> static_entities;
+en::vector<DynamicEntity> dynamic_entities;
+en::vector<ScoreGate> score_gates;
 en::vector<u32> scene_shaders;
 en::vector<u32> scene_textures;
 
@@ -559,6 +656,11 @@ en::vector<std::string> LoadSceneSelector()
 
 void LoadScene(const char* scene_path)
 {
+  static_entities.Clear();
+  dynamic_entities.Clear();
+  scene_shaders.Clear();
+  scene_textures.Clear();
+
   std::ifstream scene_stream(scene_path);
 
   std::string line;
@@ -596,9 +698,9 @@ void LoadScene(const char* scene_path)
 
   while (std::getline(scene_stream, line))
   {
-    if (line.find("#Entity") != std::string::npos)
+    if (line.find("#StaticEntity") != std::string::npos)
     {
-      Entity e;
+      StaticEntity e;
       auto space = line.find(" ");
       auto new_line = line.substr(space + 1);
 
@@ -739,12 +841,189 @@ void LoadScene(const char* scene_path)
       glBindBuffer(GL_ARRAY_BUFFER, e.vbo);
       glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &e.verts[0], GL_STATIC_DRAW);
 
-      entities.PushBack(e);
+      static_entities.PushBack(e);
+    }
+    else if (line.find("#DynamicEntity") != std::string::npos)
+    {
+      DynamicEntity e;
+      auto space = line.find(" ");
+      auto new_line = line.substr(space + 1);
+
+      auto comma = new_line.find(",");
+      auto val_str = new_line.substr(0, comma);
+      e.shader = scene_shaders[std::stoi(val_str)];
+
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(0, comma);
+      e.texture = scene_textures[std::stoi(val_str)];
+
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(0, comma);
+      f32 tmp_vec[2] = { 0.f, 0.f };
+
+      space = val_str.find(" ");
+      tmp_vec[0] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec[1] = std::stof(val_str.substr(0, space));
+
+      e.position = vec2(tmp_vec[0], tmp_vec[1]);
+
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(space + 1);
+
+      e.angle = std::stof(val_str);
+
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(0, comma);
+
+      space = val_str.find(" ");
+      tmp_vec[0] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec[1] = std::stof(val_str.substr(0, space));
+
+      e.scale = vec2(tmp_vec[0], tmp_vec[1]);
+
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(0, comma);
+      f32 tmp_vec4[4] = { 0.f, 0.f, 0.f, 0.f };
+
+      space = val_str.find(" ");
+      tmp_vec4[0] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[1] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[2] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[3] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      e.verts[0].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
+
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(0, comma);
+	
+      space = val_str.find(" ");
+      tmp_vec4[0] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[1] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[2] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[3] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      e.verts[1].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
+	
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(0, comma);
+	
+      space = val_str.find(" ");
+      tmp_vec4[0] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[1] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[2] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[3] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      e.verts[2].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
+
+      new_line = new_line.substr(comma + 2);
+      comma = new_line.find(",");
+      val_str = new_line.substr(0, comma);
+	
+      space = val_str.find(" ");
+      tmp_vec4[0] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[1] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[2] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      space = val_str.find(" ");
+      tmp_vec4[3] = std::stof(val_str.substr(0, space));
+      val_str = val_str.substr(space + 1);
+
+      e.verts[3].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
+
+      glGenVertexArrays(1, &e.vao);
+      glBindVertexArray(e.vao);
+      glGenBuffers(1, &e.vbo);
+      glBindBuffer(GL_ARRAY_BUFFER, e.vbo);
+      glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &e.verts[0], GL_STATIC_DRAW);
+
+      e.collision.position = e.position;
+      e.collision.half_extents = e.scale;
+
+      dynamic_entities.PushBack(e);
     }
   }
 }
 
 en::vector<std::string> scene_names;
+
+vec4 background_color = vec4(135.f / 255.f, 196.f / 255.f, 255.f / 255.f, 1.f);
+bool gameplay_active = false;
+f32 bird_velocity = 0.f;
+const f32 gravity = -0.0000002f;
+
+void ProcessKeyboardInput(GLFWwindow* window)
+{
+  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)  glfwSetWindowShouldClose(window, true);
+}
+
+void GameKeyCallback(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
+{
+  if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+  {
+    bird_velocity = 0.119f;
+  }
+}
+
+void MainMenuKeyCallback(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
+{
+  if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+  {
+    LoadScene(AssetPath("game_level.enscene").c_str());
+    gameplay_active = true;
+    dynamic_entities[0].collision.half_extents = vec2(0.1f, 0.121f);
+    glfwSetKeyCallback(window, GameKeyCallback);
+  }
+}
 
 s32 main()
 { 
@@ -755,12 +1034,17 @@ s32 main()
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  window = glfwCreateWindow(window_width, window_height, "Hello Window", NULL, NULL);
+  window = glfwCreateWindow(window_width, window_height, "Flappy Bird", NULL, NULL);
   
   glfwMakeContextCurrent(window);
+  glfwSwapInterval(1);
   glfwSetMouseButtonCallback(window, MouseButtonCallback);
+  glfwSetKeyCallback(window, MainMenuKeyCallback);
 
   glewInit();
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -772,36 +1056,331 @@ s32 main()
 
   StartTimer(game_timer);
 
-  bool show_file_window = false;
+  TimerInfo pillar_timer;
+  bool spawn_pillar = false;
+  pillar_timer.time_scale = MILLISECOND;
+  StartTimer(pillar_timer);
+  const f32 pillar_distance = 1.753f;
+
+  TimerInfo cloud_timer;
+  bool spawn_clouds = false;
+  cloud_timer.time_scale = MILLISECOND;
+  StartTimer(cloud_timer);
+
+  LoadScene(AssetPath("title.enscene").c_str());
+
+  s32 score = 0;
+  TimerInfo score_timer;
+  score_timer.time_scale = MILLISECOND;
+  StartTimer(score_timer);
+  bool currently_scoring = false;
 
   while (!glfwWindowShouldClose(window))
   {
     glfwPollEvents();
     StartTimer(frame_timer);
 
-    glClearColor(1.f, 0.8f, 0.7f, 1.f);
+    glClearColor(background_color.x(), background_color.y(), background_color.z(), background_color.w());
     glClear(GL_COLOR_BUFFER_BIT);
 
-    if (entities.Size() > 0)
-    {
-      for (auto& e : entities)
-      {
-        mat4 transform = mat4::Identity();
-        transform = mat4::Translate(vec3(e.position.x(), e.position.y(), 0.f));
-        transform *= mat4::Rotate(e.angle, vec3(0.f, 0.f, 1.f));
-        transform *= mat4::Scale(vec3(e.scale.x(), e.scale.y(), 1.f));
+    ProcessKeyboardInput(window);
 
-        glUseProgram(e.shader);
-        glUniformMatrix4fv(glGetUniformLocation(e.shader, "transform"), 1, GL_FALSE, transform.elements);
-        glBindVertexArray(e.vao);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)(sizeof(vec2)));
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, e.texture);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    if (gameplay_active)
+    {
+      bird_velocity = bird_velocity + gravity * delta_time;
+      if (bird_velocity > -0.225) dynamic_entities[0].angle = 2.41 * bird_velocity;
+      dynamic_entities[0].position.data[1] += delta_time * bird_velocity * 0.00001f;
+      dynamic_entities[0].collision.position.data[1] = dynamic_entities[0].position.data[1];
+
+      for (auto& s : static_entities)
+      {
+        s.position.data[0] -= delta_time * 0.0000007f * s.scale.x();
       }
+
+      for (s32 i = 1; i < dynamic_entities.Size(); i++)
+      {
+        dynamic_entities[i].position.data[0] -= delta_time * 0.0000007f;
+        dynamic_entities[i].collision.position.data[0] = dynamic_entities[i].position.data[0] - 0.039f;
+        dynamic_entities[i].collision.position.data[1] = dynamic_entities[i].position.data[1] + 0.204f;
+      }
+
+      for (auto& g : score_gates)
+      {
+        g.collision.position.data[0] -= delta_time * 0.0000007f;
+      }
+
+      for (s32 i = 1; i < dynamic_entities.Size(); i++)
+      {
+        if (AABBAABBColliding(dynamic_entities[0].collision, dynamic_entities[i].collision))
+        {
+          gameplay_active = false;
+        }
+      }
+
+      for (auto& g : score_gates)
+      {
+        if (AABBAABBColliding(dynamic_entities[0].collision, g.collision) && (u32)GetTimerValue(score_timer) > 750)
+        {
+          score++;
+          currently_scoring = true;
+          StartTimer(score_timer);
+          std::cout << score << '\n';
+        }
+      }
+
+      if (GetTimerValue(pillar_timer) > 2800)
+      {
+        spawn_pillar = true;
+      }
+
+      if (spawn_pillar)
+      {
+        DynamicEntity pillar0;
+        pillar0.position = vec2(1.5f, GetRandomFloatInRange(0.215f, 1.118f));
+        pillar0.scale = vec2(1.f, 1.f);
+        pillar0.shader = scene_shaders[0];
+        pillar0.texture = scene_textures[8];
+
+        glGenVertexArrays(1, &pillar0.vao);
+        glBindVertexArray(pillar0.vao);
+        glGenBuffers(1, &pillar0.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, pillar0.vbo);
+        glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &pillar0.verts[0], GL_STATIC_DRAW);
+
+        pillar0.collision.position = pillar0.position;
+        pillar0.collision.half_extents = vec2(0.157, 0.552f);
+
+        if (dynamic_entities.Size() > 13)
+        {
+          f32 furthest_pillar_distance = 9999.f;
+          s32 furthest_pillar_index = 9999;
+          for (s32 i = 1; i < dynamic_entities.Size(); i++)
+          {
+            if (furthest_pillar_distance > dynamic_entities[i].position.x())
+            {
+              furthest_pillar_distance = dynamic_entities[i].position.x();
+              furthest_pillar_index = i;
+            }
+          }
+
+          dynamic_entities[furthest_pillar_index] = pillar0;
+
+          if (score_gates.Size() > 6)
+          {
+            f32 furthest_collision_distance = 9999.f;
+            s32 furthest_collision_index = 9999;
+            for (s32 i = 0; i < score_gates.Size(); i++)
+            {
+              if (furthest_collision_distance > score_gates[i].collision.position.x())
+              {
+                furthest_collision_distance = score_gates[i].collision.position.x();
+                furthest_collision_index = i;
+              }
+            }
+
+            ScoreGate score_gate;
+            score_gate.collision.position = vec2(pillar0.position.x(), pillar0.position.y() - 0.65f);
+            score_gate.collision.half_extents = vec2(0.025f, 0.248f);
+            score_gates[furthest_collision_index] = score_gate;
+          }
+        }
+        else
+        {
+          dynamic_entities.PushBack(pillar0);
+
+          ScoreGate score_gate;
+          score_gate.collision.position = vec2(pillar0.position.x(), pillar0.position.y() - 0.65f);
+          score_gate.collision.half_extents = vec2(0.025f, 0.248f);
+          score_gates.PushBack(score_gate);
+        }
+
+        DynamicEntity pillar1;
+        pillar1.position = vec2(1.5f, pillar0.position.data[1] - pillar_distance);
+        pillar1.scale = vec2(1.f, 1.f);
+        pillar1.shader = scene_shaders[0];
+        pillar1.texture = scene_textures[8];
+
+        glGenVertexArrays(1, &pillar1.vao);
+        glBindVertexArray(pillar1.vao);
+        glGenBuffers(1, &pillar1.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, pillar1.vbo);
+        glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &pillar1.verts[0], GL_STATIC_DRAW);
+
+        pillar1.collision.position = pillar1.position;
+        pillar1.collision.half_extents = vec2(0.157, 0.552f);
+
+        if (dynamic_entities.Size() > 13)
+        {
+          f32 furthest_pillar_distance = 9999.f;
+          s32 furthest_pillar_index = 9999;
+          for (s32 i = 1; i < dynamic_entities.Size(); i++)
+          {
+            if (furthest_pillar_distance > dynamic_entities[i].position.x())
+            {
+              furthest_pillar_distance = dynamic_entities[i].position.x();
+              furthest_pillar_index = i;
+            }
+          }
+
+          dynamic_entities[furthest_pillar_index] = pillar1;
+        }
+        else
+        {
+          dynamic_entities.PushBack(pillar1);
+        }
+
+        spawn_pillar = false;
+        StartTimer(pillar_timer);
+      }
+
+      if (GetTimerValue(cloud_timer) > 1800)
+      {
+        spawn_clouds = true;
+      }
+
+      if (spawn_clouds)
+      {
+        StaticEntity cloud0;
+        cloud0.position = vec2(1.5f, GetRandomFloatInRange(-1.f, -0.5f));
+        cloud0.angle = GetRandomFloatInRange(0.f, ToRadians(180.f));
+        f32 scale = GetRandomFloatInRange(0.1f, 0.34f);
+        cloud0.scale = vec2(scale, scale);
+        cloud0.shader = scene_shaders[0];
+        cloud0.texture = scene_textures[std::lround(GetRandomFloatInRange(1.f, 7.f))];
+
+        glGenVertexArrays(1, &cloud0.vao);
+        glBindVertexArray(cloud0.vao);
+        glGenBuffers(1, &cloud0.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, cloud0.vbo);
+        glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud0.verts[0], GL_STATIC_DRAW);
+
+        if (static_entities.Size() > 27)
+        {
+          f32 furthest_cloud_distance = 9999.f;
+          s32 furthest_cloud_index = 9999;
+          for (s32 i = 0; i < static_entities.Size(); i++)
+          {
+            if (furthest_cloud_distance > static_entities[i].position.x())
+            {
+              furthest_cloud_distance = static_entities[i].position.x();
+              furthest_cloud_index = i;
+            }
+          }
+
+          static_entities[furthest_cloud_index] = cloud0;
+        }
+        else
+        {
+          static_entities.PushBack(cloud0);
+        }
+
+        StaticEntity cloud1;
+        cloud1.position = vec2(1.5f + GetRandomFloatInRange(0.f, 0.4f), GetRandomFloatInRange(-0.5f, 0.5f));
+        cloud1.angle = GetRandomFloatInRange(0.f, ToRadians(180.f));
+        cloud1.scale = vec2(scale, scale);
+        cloud1.shader = scene_shaders[0];
+        cloud1.texture = scene_textures[std::lround(GetRandomFloatInRange(1.f, 7.f))];
+
+        glGenVertexArrays(1, &cloud1.vao);
+        glBindVertexArray(cloud1.vao);
+        glGenBuffers(1, &cloud1.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, cloud1.vbo);
+        glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud1.verts[0], GL_STATIC_DRAW);
+
+        if (static_entities.Size() > 40)
+        {
+          f32 furthest_cloud_distance = 9999.f;
+          s32 furthest_cloud_index = 9999;
+          for (s32 i = 0; i < static_entities.Size(); i++)
+          {
+            if (furthest_cloud_distance > static_entities[i].position.x())
+            {
+              furthest_cloud_distance = static_entities[i].position.x();
+              furthest_cloud_index = i;
+            }
+          }
+
+          static_entities[furthest_cloud_index] = cloud1;
+        }
+        else
+        {
+          static_entities.PushBack(cloud1);
+        }
+
+        StaticEntity cloud2;
+        cloud2.position = vec2(1.5f + GetRandomFloatInRange(0.f, 0.4f), GetRandomFloatInRange(0.5f, 1.f));
+        cloud2.angle = GetRandomFloatInRange(0.f, ToRadians(180.f));
+        cloud2.scale = vec2(scale, scale);
+        cloud2.shader = scene_shaders[0];
+        cloud2.texture = scene_textures[std::lround(GetRandomFloatInRange(1.f, 7.f))];
+
+        glGenVertexArrays(1, &cloud2.vao);
+        glBindVertexArray(cloud2.vao);
+        glGenBuffers(1, &cloud2.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, cloud2.vbo);
+        glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud2.verts[0], GL_STATIC_DRAW);
+
+        if (static_entities.Size() > 40)
+        {
+          f32 furthest_cloud_distance = 9999.f;
+          s32 furthest_cloud_index = 9999;
+          for (s32 i = 0; i < static_entities.Size(); i++)
+          {
+            if (furthest_cloud_distance > static_entities[i].position.x())
+            {
+              furthest_cloud_distance = static_entities[i].position.x();
+              furthest_cloud_index = i;
+            }
+          }
+
+          static_entities[furthest_cloud_index] = cloud2;
+        }
+        else
+        {
+          static_entities.PushBack(cloud2);
+        }
+
+        spawn_clouds = false;
+        StartTimer(cloud_timer);
+      }
+    }
+
+    for (auto& e : static_entities)
+    {
+      mat4 transform = mat4::Identity();
+      transform = mat4::Translate(vec3(e.position.x(), e.position.y(), 0.f));
+      transform *= mat4::Rotate(e.angle, vec3(0.f, 0.f, 1.f));
+      transform *= mat4::Scale(vec3(e.scale.x(), e.scale.y(), 1.f));
+
+      glUseProgram(e.shader);
+      glUniformMatrix4fv(glGetUniformLocation(e.shader, "transform"), 1, GL_FALSE, transform.elements);
+      glBindVertexArray(e.vao);
+      glEnableVertexAttribArray(0);
+      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)0);
+      glEnableVertexAttribArray(1);
+      glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)(sizeof(vec2)));
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, e.texture);
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    for (auto& e : dynamic_entities)
+    {
+      mat4 transform = mat4::Identity();
+      transform = mat4::Translate(vec3(e.position.x(), e.position.y(), 0.f));
+      transform *= mat4::Rotate(e.angle, vec3(0.f, 0.f, 1.f));
+      transform *= mat4::Scale(vec3(e.scale.x(), e.scale.y(), 1.f));
+
+      glUseProgram(e.shader);
+      glUniformMatrix4fv(glGetUniformLocation(e.shader, "transform"), 1, GL_FALSE, transform.elements);
+      glBindVertexArray(e.vao);
+      glEnableVertexAttribArray(0);
+      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)0);
+      glEnableVertexAttribArray(1);
+      glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)(sizeof(vec2)));
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, e.texture);
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     }
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -815,6 +1394,8 @@ s32 main()
     {
       scene_names = LoadSceneSelector();
     }
+
+    ImGui::ColorEdit3("Color", &background_color.data[0]);
 
     for (const auto& scene_name : scene_names)
     {

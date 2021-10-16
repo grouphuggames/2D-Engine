@@ -1,9 +1,0 @@
-#!/bin/bash
-
-NUM_THREADS=$(grep -c ^processor /proc/cpuinfo)
-echo "Compiling on $NUM_THREADS cpu threads"
-
-cd build/
-cmake ../
-make
-./Engine

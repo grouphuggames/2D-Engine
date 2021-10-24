@@ -11,6 +11,7 @@
 #include <string>
 #include <chrono>
 #include <filesystem>
+#include <unordered_map>
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_glfw.h"
@@ -30,6 +31,16 @@ const f64 PI = 3.14159;
 static inline f32 ToRadians(f32 degrees)
 {
   return degrees * ((f32)PI / 180.f);
+}
+
+static void DebugPrintToConsole() {}
+
+template<typename T, typename... Types>
+static void DebugPrintToConsole(T var1, Types... var2)
+{
+  std::cout << var1;
+  DebugPrintToConsole(var2...);
+  std::cout << '\n';
 }
 
 enum SUPER_TIME
@@ -110,7 +121,7 @@ public:
 
 void DebugPrintVec2(vec2 vec)
 {
-  std::cout << "{ " << vec.x() << ", " << vec.y() << " }\n";
+  DebugPrintToConsole("{ ", vec.x(), ", ", vec.y(), " }");
 }
 
 struct vec3
@@ -160,7 +171,7 @@ struct vec3
 
 void DebugPrintVec3(vec3 vec)
 {
-  std::cout << "{ " << vec.x() << ", " << vec.y() << ", " << vec.z() << " }\n";
+  DebugPrintToConsole("{ ", vec.x(), ", ", vec.y(), ", ", vec.z(), " }");
 }
 
 struct vec4
@@ -207,7 +218,7 @@ public:
 
 void DebugPrintVec4(vec4 vec)
 {
-  std::cout << "{ " << vec.x() << ", " << vec.y() << ", " << vec.z() << ", " << vec.w() << " }\n";
+  DebugPrintToConsole("{ ", vec.x(), ", ", vec.y(), ", ", vec.z(), ", ", vec.w(), " }");
 }
 
 class mat4
@@ -326,21 +337,21 @@ public:
 f32 delta_time = 0.f;
 f32 last_frame = 0.f;
 
-std::string AssetPath(const char* path)
+std::string AssetPath(const char* filename)
 {
   std::string prefix = "../../";
-  return prefix.append(path);
+  return prefix.append(filename);
 }
 
-u32 TextureFromFile(const char* path, bool gamma = false)
+u32 TextureFromFile(const char* filename, bool gamma = false)
 {
-  std::string filename = AssetPath(path);
+  std::string filepath = AssetPath(filename);
 
   u32 texture_id;
   glGenTextures(1, &texture_id);
 
   s32 width, height, nr_components;
-  unsigned char* data = stbi_load(filename.c_str(), &width, &height, &nr_components, 0);
+  unsigned char* data = stbi_load(filepath.c_str(), &width, &height, &nr_components, 0);
   if (data)
   {
     GLenum format;
@@ -358,11 +369,11 @@ u32 TextureFromFile(const char* path, bool gamma = false)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     stbi_image_free(data);
-    std::cout << "Successfully loaded texture: " << filename << '\n';
+    DebugPrintToConsole("Successfully loaded texture: ", filepath);
   }
   else
   {
-    std::cout << "Texture failed to load: " << path << '\n';
+    DebugPrintToConsole("Texture failed to load: ", filepath);
     stbi_image_free(data);
   }
 
@@ -376,9 +387,10 @@ enum SHADER_TYPE
   FRAGMENT
 };
 
-u32 CreateGLShader(const char* filepath)
+u32 CreateGLShader(const char* filename)
 {
-  std::ifstream stream(AssetPath(filepath));
+  std::string filepath = AssetPath(filename);
+  std::ifstream stream(filepath);
   std::string line;
   std::stringstream shader_streams[2];
   SHADER_TYPE type = NONE;
@@ -399,8 +411,8 @@ u32 CreateGLShader(const char* filepath)
       {
 	char error_type[128] = "Unsupported shader type: ";
 	strcat(error_type, line.c_str());
-	std::cout << "Failed to load shader: " << filepath << '\n';
-	std::cout << error_type << '\n';
+  DebugPrintToConsole("Failed to load shader: ", filepath);
+  DebugPrintToConsole(error_type);
       }
     }
     else
@@ -423,8 +435,8 @@ u32 CreateGLShader(const char* filepath)
   if (!success)
   {
     glGetShaderInfoLog(vs, 512, nullptr, log_info);
-    std::cout << "Failed to load shader: " << filepath << '\n';
-    std::cout << log_info << "\n\n\n";
+    DebugPrintToConsole("Failed to load shader: ", filepath);
+    DebugPrintToConsole(log_info);
 
     return 9999;
   }
@@ -439,8 +451,8 @@ u32 CreateGLShader(const char* filepath)
   if (!success)
   {
     glGetShaderInfoLog(fs, 512, nullptr, log_info);
-    std::cout << "Failed to load shader: " << filepath << '\n';
-    std::cout << log_info << "\n\n\n";
+    DebugPrintToConsole("Failed to load shader: ", filepath);
+    DebugPrintToConsole(log_info);
 
     return 9999;
   }
@@ -454,8 +466,8 @@ u32 CreateGLShader(const char* filepath)
   if (!success)
   {
     glGetProgramInfoLog(program, 512, nullptr, log_info);
-    std::cout << "Failed to load shader: " << filepath << '\n';
-    std::cout << log_info << "\n\n\n";
+    DebugPrintToConsole("Failed to load shader: ", filepath);
+    DebugPrintToConsole(log_info);
 
     return 9999;
   }
@@ -466,7 +478,7 @@ u32 CreateGLShader(const char* filepath)
   shader_streams[0].str("");
   shader_streams[1].str("");
 
-  std::cout << "Successfully loaded shader: " << filepath << '\n';
+  DebugPrintToConsole("Successfully loaded shader: ", filepath);
   
   return program;
 }
@@ -522,6 +534,89 @@ namespace en
   };
 }
 
+enum BUTTON_ACTION
+{
+  PRESS,
+  HOLD
+};
+
+using InputFunc = void(*)(void);
+
+struct FuncInfo
+{
+  InputFunc func;
+  BUTTON_ACTION action;
+};
+
+static struct
+{
+  std::unordered_map<s32, FuncInfo> InputFuncs = {};
+} input_wrapper;
+
+void SetKeyboardInput(InputFunc func, s32 button, BUTTON_ACTION action)
+{
+  FuncInfo f;
+  f.func = func;
+  f.action = action;
+
+  if (input_wrapper.InputFuncs.find(button) == input_wrapper.InputFuncs.end())
+  {
+    input_wrapper.InputFuncs.insert({ button, f });
+  }
+  else
+  {
+    input_wrapper.InputFuncs.at(button) = f;
+  }
+}
+
+void ProcessKeyboardInput(GLFWwindow* window)
+{
+  if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && input_wrapper.InputFuncs.at(GLFW_KEY_SPACE).action == HOLD)
+  {
+    try
+    {
+      input_wrapper.InputFuncs.at(GLFW_KEY_SPACE).func();
+    }
+    catch (const std::exception&)
+    {
+      DebugPrintToConsole("That key has no binding yet!");
+    }
+  }
+}
+
+void KeyCallback(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
+{
+  if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+  {
+    if (input_wrapper.InputFuncs.at(key).action == PRESS)
+    {
+      try
+      {
+        input_wrapper.InputFuncs.at(key).func();
+      }
+      catch (const std::exception&)
+      {
+        DebugPrintToConsole("That key has no binding yet!");
+      }
+    }
+  }
+
+  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+  {
+    if (input_wrapper.InputFuncs.at(key).action == PRESS)
+    {
+      try
+      {
+        input_wrapper.InputFuncs.at(key).func();
+      }
+      catch (const std::exception&)
+      {
+        DebugPrintToConsole("That key has no binding yet!");
+      }
+    }
+  }
+}
+
 void MouseButtonCallback(GLFWwindow* window, s32 button, s32 action, s32 mods)
 {
   if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
@@ -544,11 +639,11 @@ en::vector<std::string> LoadSceneSelector()
   
   for (const auto& file : std::filesystem::directory_iterator(AssetPath("")))
   {
-    std::string file_path = file.path().string();
+    std::string filepath = file.path().string();
     
-    if (file_path.find(".enscene") != std::string::npos)
+    if (filepath.find(".enscene") != std::string::npos)
     {
-      result.PushBack(file_path);
+      result.PushBack(filepath);
     }
   }
 
@@ -744,6 +839,11 @@ void LoadScene(const char* scene_path)
 
 en::vector<std::string> scene_names;
 
+void DoSomething()
+{
+  DebugPrintToConsole("I am printing something!");
+}
+
 s32 main()
 { 
   GLFWwindow* window;
@@ -757,6 +857,7 @@ s32 main()
   
   glfwMakeContextCurrent(window);
   glfwSetMouseButtonCallback(window, MouseButtonCallback);
+  glfwSetKeyCallback(window, KeyCallback);
 
   glewInit();
 
@@ -772,9 +873,13 @@ s32 main()
 
   bool show_file_window = false;
 
+  SetKeyboardInput([](){ DebugPrintToConsole("The lambda even works!"); }, GLFW_KEY_SPACE, PRESS);
+
   while (!glfwWindowShouldClose(window))
   {
     glfwPollEvents();
+    ProcessKeyboardInput(window);
+
     StartTimer(frame_timer);
 
     glClearColor(1.f, 0.8f, 0.7f, 1.f);

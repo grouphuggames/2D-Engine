@@ -540,7 +540,16 @@ enum BUTTON_ACTION
   HOLD
 };
 
+// the user input system currently supports functions that return void with no params and
+// functions that require a GLFWwindow* passed to them and return void
+
+// lambdas that do not capture or require params are also supported
+
+// currently data can only be modified if it is in global scope
+
 using InputFunc = void(*)(void);
+using GLFWInputFunc = void(*)(GLFWwindow*);   // this is used ONLY when setting up input for a function
+                                              // that requires a GLFWwindow* to be passed to it
 
 struct FuncInfo
 {
@@ -548,10 +557,33 @@ struct FuncInfo
   BUTTON_ACTION action;
 };
 
+struct GLFWFuncInfo
+{
+  GLFWInputFunc func;
+  BUTTON_ACTION action;
+};
+
 static struct
 {
   std::unordered_map<s32, FuncInfo> InputFuncs = {};
+  std::unordered_map<s32, GLFWFuncInfo> GLFWInputFuncs = {};
 } input_wrapper;
+
+void SetKeyboardInput(GLFWInputFunc func, s32 button, BUTTON_ACTION action)
+{
+  GLFWFuncInfo f;
+  f.func = func;
+  f.action = action;
+
+  if (input_wrapper.GLFWInputFuncs.find(button) == input_wrapper.GLFWInputFuncs.end())
+  {
+    input_wrapper.GLFWInputFuncs.insert({ button, f });
+  }
+  else
+  {
+    input_wrapper.GLFWInputFuncs.at(button) = f;
+  }
+}
 
 void SetKeyboardInput(InputFunc func, s32 button, BUTTON_ACTION action)
 {
@@ -569,49 +601,57 @@ void SetKeyboardInput(InputFunc func, s32 button, BUTTON_ACTION action)
   }
 }
 
+s32 possible_keybindings[] = 
+{
+  GLFW_KEY_SPACE,
+  GLFW_KEY_A,
+  GLFW_KEY_D,
+  GLFW_KEY_S,
+  GLFW_KEY_W,
+  GLFW_KEY_ESCAPE
+};
+
 void ProcessKeyboardInput(GLFWwindow* window)
 {
-  if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && input_wrapper.InputFuncs.at(GLFW_KEY_SPACE).action == HOLD)
+  for (s32 i = 0; i < (sizeof(possible_keybindings) / sizeof(possible_keybindings[0])); i++)
   {
-    try
+    if (glfwGetKey(window, possible_keybindings[i]) == GLFW_PRESS && input_wrapper.InputFuncs.at(possible_keybindings[i]).action == HOLD)
     {
-      input_wrapper.InputFuncs.at(GLFW_KEY_SPACE).func();
-    }
-    catch (const std::exception&)
-    {
-      DebugPrintToConsole("That key has no binding yet!");
+      try
+      {
+        input_wrapper.InputFuncs.at(possible_keybindings[i]).func();
+      }
+      catch (const std::exception&)
+      {
+        return;
+      }
     }
   }
 }
 
 void KeyCallback(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
 {
-  if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+  for (s32 i = 0; i < (sizeof(possible_keybindings) / sizeof(possible_keybindings[0])); i++)
   {
-    if (input_wrapper.InputFuncs.at(key).action == PRESS)
+    if (key == possible_keybindings[i] && action == GLFW_PRESS)
     {
-      try
+      if (input_wrapper.InputFuncs.at(key).action == PRESS)
       {
-        input_wrapper.InputFuncs.at(key).func();
-      }
-      catch (const std::exception&)
-      {
-        DebugPrintToConsole("That key has no binding yet!");
-      }
-    }
-  }
-
-  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-  {
-    if (input_wrapper.InputFuncs.at(key).action == PRESS)
-    {
-      try
-      {
-        input_wrapper.InputFuncs.at(key).func();
-      }
-      catch (const std::exception&)
-      {
-        DebugPrintToConsole("That key has no binding yet!");
+        try
+        {
+          input_wrapper.InputFuncs.at(key).func();
+        }
+        catch (const std::exception&)
+        {
+          try
+          {
+            input_wrapper.GLFWInputFuncs.at(key).func(window);
+          }
+          catch (std::exception&)
+          {
+            return;
+          }
+        }
       }
     }
   }
@@ -844,6 +884,11 @@ void DoSomething()
   DebugPrintToConsole("I am printing something!");
 }
 
+void CloseWindow(GLFWwindow* window)
+{
+  glfwSetWindowShouldClose(window, true);
+}
+
 s32 main()
 { 
   GLFWwindow* window;
@@ -872,8 +917,7 @@ s32 main()
   StartTimer(game_timer);
 
   bool show_file_window = false;
-
-  SetKeyboardInput([](){ DebugPrintToConsole("The lambda even works!"); }, GLFW_KEY_SPACE, PRESS);
+  SetKeyboardInput(CloseWindow, GLFW_KEY_ESCAPE, PRESS);
 
   while (!glfwWindowShouldClose(window))
   {

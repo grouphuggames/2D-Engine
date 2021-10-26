@@ -1,5 +1,7 @@
-gui_element_textured.glsl
-gi_image.png
+entity_textured.glsl
+entity_image.png
+*MainTheme.wav
+Hit.wav
 
 shader index, texture index, position, rotation, scale, verts[0].color, verts[1].color, verts[2].color, verts[3].color
 

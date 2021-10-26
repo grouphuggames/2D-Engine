@@ -15,6 +15,7 @@
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_glfw.h"
+#include "fmod.hpp"
 #include "stb_image.h"
 
 
@@ -343,6 +344,12 @@ std::string AssetPath(const char* filename)
   return prefix.append(filename);
 }
 
+std::string AssetPath(std::string path)
+{
+  std::string prefix = "../../";
+  return prefix.append(path);
+}
+
 u32 TextureFromFile(const char* filename, bool gamma = false)
 {
   std::string filepath = AssetPath(filename);
@@ -534,6 +541,9 @@ namespace en
   };
 }
 
+FMOD::System* audio_system;
+FMOD::Channel* audio_channels[4];   // audio system can play up to 4 sounds simultaneously
+
 enum BUTTON_ACTION
 {
   PRESS,
@@ -672,6 +682,7 @@ void MouseButtonCallback(GLFWwindow* window, s32 button, s32 action, s32 mods)
 en::vector<Entity> entities;
 en::vector<u32> scene_shaders;
 en::vector<u32> scene_textures;
+en::vector<FMOD::Sound*> scene_sounds;
 
 en::vector<std::string> LoadSceneSelector()
 {
@@ -692,12 +703,18 @@ en::vector<std::string> LoadSceneSelector()
 
 void LoadScene(const char* scene_path)
 {
+  entities.Clear();
+  scene_shaders.Clear();
+  scene_textures.Clear();
+  scene_sounds.Clear();
+
   std::ifstream scene_stream(scene_path);
 
   std::string line;
 
   en::vector<std::string> scene_shader_names;
   en::vector<std::string> scene_texture_names;
+  en::vector<std::string> scene_sound_names;
 
   while (std::getline(scene_stream, line))
   {
@@ -708,6 +725,10 @@ void LoadScene(const char* scene_path)
     else if (line.find(".png") != std::string::npos)
     {
       scene_texture_names.PushBack(line);
+    }
+    else if (line.find(".wav") != std::string::npos)
+    {
+      scene_sound_names.PushBack(line);
     }
     else
     {
@@ -725,6 +746,40 @@ void LoadScene(const char* scene_path)
   {
     std::string t_path = t;
     scene_textures.PushBack(TextureFromFile(t_path.c_str()));
+  }
+
+  for (const auto& s : scene_sound_names)
+  {
+    std::string s_path = s;
+    if (s_path.find("*") != std::string::npos)
+    {
+      auto star = s_path.find("*");
+      s_path.erase(star, 1);
+
+      FMOD::Sound* sound;
+      if (audio_system->createSound(AssetPath(s_path).c_str(), FMOD_DEFAULT | FMOD_LOOP_NORMAL, 0, &sound) == FMOD_OK)
+      {
+        DebugPrintToConsole("Successfully loaded audio asset: ", s_path);
+        scene_sounds.PushBack(sound);
+      }
+      else
+      {
+        DebugPrintToConsole("Failed to load audio asset: ", s_path);
+      }
+    }
+    else
+    {
+      FMOD::Sound* sound;
+      if (audio_system->createSound(AssetPath(s_path).c_str(), FMOD_DEFAULT, 0, &sound) == FMOD_OK)
+      {
+        DebugPrintToConsole("Successfully loaded audio asset: ", s_path);
+        scene_sounds.PushBack(sound);
+      }
+      else
+      {
+        DebugPrintToConsole("Failed to load audio asset: ", s_path);
+      }
+    }
   }
 
   while (std::getline(scene_stream, line))
@@ -889,6 +944,11 @@ void CloseWindow(GLFWwindow* window)
   glfwSetWindowShouldClose(window, true);
 }
 
+void Hit()
+{
+  audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channels[1]);
+}
+
 s32 main()
 { 
   GLFWwindow* window;
@@ -914,10 +974,14 @@ s32 main()
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init((char*)glGetString(GL_NUM_SHADING_LANGUAGE_VERSIONS));
 
+  FMOD::System_Create(&audio_system);
+  audio_system->init(64, FMOD_INIT_NORMAL, 0);
+
   StartTimer(game_timer);
 
   bool show_file_window = false;
   SetKeyboardInput(CloseWindow, GLFW_KEY_ESCAPE, PRESS);
+  SetKeyboardInput(Hit, GLFW_KEY_SPACE, PRESS);
 
   while (!glfwWindowShouldClose(window))
   {
@@ -968,6 +1032,7 @@ s32 main()
       if (ImGui::Button(scene_name.c_str()))
       {
         LoadScene(scene_name.c_str());
+        audio_system->playSound(scene_sounds[0], nullptr, false, &audio_channels[0]);
         scene_names.Clear();
       }
     }

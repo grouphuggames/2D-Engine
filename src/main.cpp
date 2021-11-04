@@ -11,6 +11,7 @@
 #include <string>
 #include <chrono>
 #include <filesystem>
+#include <random>
 #include <unordered_map>
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
@@ -44,7 +45,21 @@ static void DebugPrintToConsole(T var1, Types... var2)
   std::cout << '\n';
 }
 
-enum class SUPER_TIME
+f32 GetRandomFloat()
+{
+  std::mt19937 generator((u32)std::chrono::steady_clock::now().time_since_epoch().count());
+  std::uniform_real_distribution<f32> distribution(0.f, 1.f);
+  return distribution(generator);
+}
+
+f32 GetRandomFloatInRange(f32 lower, f32 upper)
+{
+  std::mt19937 generator((u32)std::chrono::steady_clock::now().time_since_epoch().count());
+  std::uniform_real_distribution<f32> distribution(lower, upper);
+  return distribution(generator);
+}
+
+enum class TIME
 {
   NANOSECOND,
   MICROSECOND,
@@ -53,15 +68,11 @@ enum class SUPER_TIME
 
 struct TimerInfo
 {
-  SUPER_TIME time_scale;
+  TIME time_scale = TIME::MILLISECOND;
   std::chrono::time_point<std::chrono::steady_clock> timer_start;
   std::chrono::time_point<std::chrono::steady_clock> timer_stop;
   u32 time_delta;
 };
-
-TimerInfo game_timer;
-TimerInfo frame_timer;
-f32 game_time = 0.f;
 
 void StartTimer(TimerInfo& info)
 {
@@ -71,12 +82,12 @@ void StartTimer(TimerInfo& info)
 u32 GetTimerValue(TimerInfo& info)
 {
   auto current_time = std::chrono::high_resolution_clock::now();
-  if (info.time_scale == SUPER_TIME::NANOSECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == SUPER_TIME::MICROSECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::microseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == SUPER_TIME::MILLISECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
+  if (info.time_scale == TIME::NANOSECOND)
+    return (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - info.timer_start).count();
+  else if (info.time_scale == TIME::MICROSECOND)
+    return (u32)std::chrono::duration_cast<std::chrono::microseconds>(current_time - info.timer_start).count();
+  else if (info.time_scale == TIME::MILLISECOND)
+    return (u32)std::chrono::duration_cast<std::chrono::milliseconds>(current_time - info.timer_start).count();
 
   return 0;
 }
@@ -84,13 +95,17 @@ u32 GetTimerValue(TimerInfo& info)
 void StopTimer(TimerInfo& info)
 {
   info.timer_stop = std::chrono::high_resolution_clock::now();
-  if (info.time_scale == SUPER_TIME::NANOSECOND)
+  if (info.time_scale == TIME::NANOSECOND)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == SUPER_TIME::MICROSECOND)
+  else if (info.time_scale == TIME::MICROSECOND)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::microseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == SUPER_TIME::MILLISECOND)
+  else if (info.time_scale == TIME::MILLISECOND)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
 }
+
+TimerInfo game_timer;
+TimerInfo frame_timer;
+f32 game_time = 0.f;
 
 struct vec2
 {
@@ -408,18 +423,18 @@ u32 CreateGLShader(const char* filename)
     {
       if (line.find("vertex") != std::string::npos)
       {
-	type = SHADER_TYPE::VERTEX;
+        type = SHADER_TYPE::VERTEX;
       }
       else if (line.find("fragment") != std::string::npos)
       {
-	type = SHADER_TYPE::FRAGMENT;
+        type = SHADER_TYPE::FRAGMENT;
       }
       else
       {
-	char error_type[128] = "Unsupported shader type: ";
-	strcat(error_type, line.c_str());
-  DebugPrintToConsole("Failed to load shader: ", filepath);
-  DebugPrintToConsole(error_type);
+        char error_type[128] = "Unsupported shader type: ";
+        strcat(error_type, line.c_str());
+        DebugPrintToConsole("Failed to load shader: ", filepath);
+        DebugPrintToConsole(error_type);
       }
     }
     else
@@ -934,11 +949,6 @@ void LoadScene(const char* scene_path)
 
 en::vector<std::string> scene_names;
 
-void DoSomething()
-{
-  DebugPrintToConsole("I am printing something!");
-}
-
 bool application_active = true;
 
 void CloseWindow(GLFWwindow* window)
@@ -952,9 +962,61 @@ void Hit()
   audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channels[1]);
 }
 
-bool debug_menu_clicked = false;
-bool debug_tools_clicked = false;
-bool debug_other_tools_clicked = false;
+enum class ANIM_STATE
+{
+  ACTIVE,
+  INACTIVE
+};
+
+struct AnimInfo
+{
+  s32 anim_frame = 0;
+  bool anim_flipped = false;
+  TimerInfo anim_timer;
+  ANIM_STATE anim_state = ANIM_STATE::INACTIVE;
+};
+
+AnimInfo megaman_anim = {};
+
+void RunRight()
+{
+  megaman_anim.anim_flipped = false;
+  megaman_anim.anim_state = ANIM_STATE::ACTIVE;
+  u32 sprite_timer_value = GetTimerValue(megaman_anim.anim_timer);
+  if (sprite_timer_value > 100)
+  {
+    if (megaman_anim.anim_frame == 9)
+    {
+      megaman_anim.anim_frame = 0;
+    }
+    else
+    {
+      megaman_anim.anim_frame++;
+    }
+
+    StartTimer(megaman_anim.anim_timer);
+  }
+}
+
+void RunLeft()
+{
+  megaman_anim.anim_flipped = true;
+  megaman_anim.anim_state = ANIM_STATE::ACTIVE;
+  u32 sprite_timer_value = GetTimerValue(megaman_anim.anim_timer);
+  if (sprite_timer_value > 100)
+  {
+    if (megaman_anim.anim_frame == 9)
+    {
+      megaman_anim.anim_frame = 0;
+    }
+    else
+    {
+      megaman_anim.anim_frame++;
+    }
+
+    StartTimer(megaman_anim.anim_timer);
+  }
+}
 
 s32 main()
 {
@@ -998,9 +1060,26 @@ s32 main()
 
   StartTimer(game_timer);
 
-  bool show_demo_window = true;
   SetKeyboardInput(CloseWindow, GLFW_KEY_ESCAPE, BUTTON_ACTION::PRESS);
   SetKeyboardInput(Hit, GLFW_KEY_SPACE, BUTTON_ACTION::PRESS);
+
+  SetKeyboardInput(RunRight, GLFW_KEY_D, BUTTON_ACTION::HOLD);
+  SetKeyboardInput(RunLeft, GLFW_KEY_A, BUTTON_ACTION::HOLD);
+
+  Entity megaman;
+  megaman.position = vec2(0.f, 0.f);
+  megaman.scale = vec2(0.25f, 0.25f);
+  megaman.shader = CreateGLShader("entity_animated.glsl");
+  megaman.texture = TextureFromFile("megaman_run.jpg");
+  megaman.angle = 0.f;
+  glGenVertexArrays(1, &megaman.vao);
+  glBindVertexArray(megaman.vao);
+  glGenBuffers(1, &megaman.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, megaman.vbo);
+  glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &megaman.verts[0], GL_STATIC_DRAW);
+
+  entities.PushBack(megaman);
+  StartTimer(megaman_anim.anim_timer);
 
   while (application_active)
   {
@@ -1023,6 +1102,25 @@ s32 main()
 
         glUseProgram(e.shader);
         glUniformMatrix4fv(glGetUniformLocation(e.shader, "transform"), 1, GL_FALSE, transform.elements);
+        if (megaman_anim.anim_state == ANIM_STATE::ACTIVE)
+        {
+          glUniform1i(glGetUniformLocation(e.shader, "anim_frame"), megaman_anim.anim_frame);
+        }
+        else
+        {
+          megaman_anim.anim_frame = 0;
+          glUniform1i(glGetUniformLocation(e.shader, "anim_frame"), megaman_anim.anim_frame);
+        }
+
+        if (megaman_anim.anim_flipped)
+        {
+          glUniform1f(glGetUniformLocation(e.shader, "anim_flip_val"), -1.f);
+        }
+        else
+        {
+          glUniform1f(glGetUniformLocation(e.shader, "anim_flip_val"), 1.f);
+        }
+
         glBindVertexArray(e.vao);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)0);
@@ -1034,58 +1132,12 @@ s32 main()
       }
     }
 
-/*
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    // draw ui here
-    ImGui::DockSpaceOverViewport();
-    //if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
-
-    ImGuiWindowFlags window_flags = 0;
-
-    const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 650, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
-    
-    ImGui::Begin("UI Test Window", &application_active, window_flags);
-
-    ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
-    if (ImGui::BeginMenuBar())
-    {
-      if (ImGui::BeginMenu("Menu"))
-      {
-        ImGui::MenuItem("Do something", nullptr, &debug_menu_clicked);
-        ImGui::EndMenu();
-      }
-      if (ImGui::BeginMenu("Tools"))
-      {
-        ImGui::MenuItem("Do something else", nullptr, &debug_tools_clicked);
-        ImGui::MenuItem("Do another thing", nullptr, &debug_other_tools_clicked);
-        ImGui::EndMenu();
-      }
-      ImGui::EndMenuBar();
-    }
-    
-    ImGui::End();
-
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-      ImGui::UpdatePlatformWindows();
-      ImGui::RenderPlatformWindowsDefault();
-      glfwMakeContextCurrent(window);
-    }
-*/
-
     glfwSwapBuffers(window);
 
     game_time = (f32)GetTimerValue(game_timer) / 1000.f;
     StopTimer(frame_timer);
     delta_time = frame_timer.time_delta / 1000.f;
+    megaman_anim.anim_state = ANIM_STATE::INACTIVE;
   }
 
   ImGui_ImplOpenGL3_Shutdown();

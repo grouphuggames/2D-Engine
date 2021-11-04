@@ -42,6 +42,9 @@
     <ClInclude Include="C:\2D-Engine\src\imgui_impl_opengl3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="C:\2D-Engine\src\imgui_impl_opengl3_loader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="C:\2D-Engine\src\imgui_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>

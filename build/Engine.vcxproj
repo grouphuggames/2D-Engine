@@ -321,6 +321,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClInclude Include="C:\2D-Engine\src\imgui.h" />
     <ClInclude Include="C:\2D-Engine\src\imgui_impl_glfw.h" />
     <ClInclude Include="C:\2D-Engine\src\imgui_impl_opengl3.h" />
+    <ClInclude Include="C:\2D-Engine\src\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="C:\2D-Engine\src\imgui_internal.h" />
     <ClInclude Include="C:\2D-Engine\src\imstb_rectpack.h" />
     <ClInclude Include="C:\2D-Engine\src\imstb_textedit.h" />

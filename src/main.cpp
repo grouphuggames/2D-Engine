@@ -44,7 +44,7 @@ static void DebugPrintToConsole(T var1, Types... var2)
   std::cout << '\n';
 }
 
-enum SUPER_TIME
+enum class SUPER_TIME
 {
   NANOSECOND,
   MICROSECOND,
@@ -71,11 +71,11 @@ void StartTimer(TimerInfo& info)
 u32 GetTimerValue(TimerInfo& info)
 {
   auto current_time = std::chrono::high_resolution_clock::now();
-  if (info.time_scale == NANOSECOND)
+  if (info.time_scale == SUPER_TIME::NANOSECOND)
     return (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == MICROSECOND)
+  else if (info.time_scale == SUPER_TIME::MICROSECOND)
     return (u32)std::chrono::duration_cast<std::chrono::microseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == MILLISECOND)
+  else if (info.time_scale == SUPER_TIME::MILLISECOND)
     return (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
 
   return 0;
@@ -84,11 +84,11 @@ u32 GetTimerValue(TimerInfo& info)
 void StopTimer(TimerInfo& info)
 {
   info.timer_stop = std::chrono::high_resolution_clock::now();
-  if (info.time_scale == NANOSECOND)
+  if (info.time_scale == SUPER_TIME::NANOSECOND)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == MICROSECOND)
+  else if (info.time_scale == SUPER_TIME::MICROSECOND)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::microseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == MILLISECOND)
+  else if (info.time_scale == SUPER_TIME::MILLISECOND)
     info.time_delta = (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
 }
 
@@ -387,7 +387,7 @@ u32 TextureFromFile(const char* filename, bool gamma = false)
   return texture_id;
 }
 
-enum SHADER_TYPE
+enum class SHADER_TYPE
 {
   NONE = -1,
   VERTEX,
@@ -400,7 +400,7 @@ u32 CreateGLShader(const char* filename)
   std::ifstream stream(filepath);
   std::string line;
   std::stringstream shader_streams[2];
-  SHADER_TYPE type = NONE;
+  SHADER_TYPE type = SHADER_TYPE::NONE;
 
   while (std::getline(stream, line))
   {
@@ -408,11 +408,11 @@ u32 CreateGLShader(const char* filename)
     {
       if (line.find("vertex") != std::string::npos)
       {
-	type = VERTEX;
+	type = SHADER_TYPE::VERTEX;
       }
       else if (line.find("fragment") != std::string::npos)
       {
-	type = FRAGMENT;
+	type = SHADER_TYPE::FRAGMENT;
       }
       else
       {
@@ -431,7 +431,7 @@ u32 CreateGLShader(const char* filename)
   stream.close();
 
   u32 vs = glCreateShader(GL_VERTEX_SHADER);
-  std::string vs_source_data = shader_streams[VERTEX].str();
+  std::string vs_source_data = shader_streams[(s32)SHADER_TYPE::VERTEX].str();
   const char* vs_source = vs_source_data.c_str();
   glShaderSource(vs, 1, &vs_source, nullptr);
   glCompileShader(vs);
@@ -449,7 +449,7 @@ u32 CreateGLShader(const char* filename)
   }
 
   u32 fs = glCreateShader(GL_FRAGMENT_SHADER);
-  std::string fs_source_data = shader_streams[FRAGMENT].str();
+  std::string fs_source_data = shader_streams[(s32)SHADER_TYPE::FRAGMENT].str();
   const char* fs_source = fs_source_data.c_str();
   glShaderSource(fs, 1, &fs_source, nullptr);
   glCompileShader(fs);
@@ -544,7 +544,7 @@ namespace en
 FMOD::System* audio_system;
 FMOD::Channel* audio_channels[4];   // audio system can play up to 4 sounds simultaneously
 
-enum BUTTON_ACTION
+enum class BUTTON_ACTION
 {
   PRESS,
   HOLD
@@ -625,7 +625,7 @@ void ProcessKeyboardInput(GLFWwindow* window)
 {
   for (s32 i = 0; i < (sizeof(possible_keybindings) / sizeof(possible_keybindings[0])); i++)
   {
-    if (glfwGetKey(window, possible_keybindings[i]) == GLFW_PRESS && input_wrapper.InputFuncs.at(possible_keybindings[i]).action == HOLD)
+    if (glfwGetKey(window, possible_keybindings[i]) == GLFW_PRESS && input_wrapper.InputFuncs.at(possible_keybindings[i]).action == BUTTON_ACTION::HOLD)
     {
       try
       {
@@ -645,7 +645,7 @@ void KeyCallback(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods
   {
     if (key == possible_keybindings[i] && action == GLFW_PRESS)
     {
-      if (input_wrapper.InputFuncs.at(key).action == PRESS)
+      if (input_wrapper.InputFuncs.at(key).action == BUTTON_ACTION::PRESS)
       {
         try
         {
@@ -939,9 +939,12 @@ void DoSomething()
   DebugPrintToConsole("I am printing something!");
 }
 
+bool application_active = true;
+
 void CloseWindow(GLFWwindow* window)
 {
-  glfwSetWindowShouldClose(window, true);
+  application_active = false;
+  glfwSetWindowShouldClose(window, application_active);
 }
 
 void Hit()
@@ -949,8 +952,13 @@ void Hit()
   audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channels[1]);
 }
 
+bool debug_menu_clicked = false;
+bool debug_tools_clicked = false;
+bool debug_other_tools_clicked = false;
+
 s32 main()
-{ 
+{
+  const char* glsl_version = "#version 330";
   GLFWwindow* window;
   
   glfwInit();
@@ -961,6 +969,7 @@ s32 main()
   window = glfwCreateWindow(window_width, window_height, "Hello Window", NULL, NULL);
   
   glfwMakeContextCurrent(window);
+  glfwSwapInterval(1);
   glfwSetMouseButtonCallback(window, MouseButtonCallback);
   glfwSetKeyCallback(window, KeyCallback);
 
@@ -969,7 +978,17 @@ s32 main()
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO(); (void)io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
   ImGui::StyleColorsDark();
+
+  ImGuiStyle& style = ImGui::GetStyle();
+  if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+  {
+    style.WindowRounding = 0.f;
+    style.Colors[ImGuiCol_WindowBg].w = 1.f;
+  }
 
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init((char*)glGetString(GL_NUM_SHADING_LANGUAGE_VERSIONS));
@@ -979,11 +998,11 @@ s32 main()
 
   StartTimer(game_timer);
 
-  bool show_file_window = false;
-  SetKeyboardInput(CloseWindow, GLFW_KEY_ESCAPE, PRESS);
-  SetKeyboardInput(Hit, GLFW_KEY_SPACE, PRESS);
+  bool show_demo_window = true;
+  SetKeyboardInput(CloseWindow, GLFW_KEY_ESCAPE, BUTTON_ACTION::PRESS);
+  SetKeyboardInput(Hit, GLFW_KEY_SPACE, BUTTON_ACTION::PRESS);
 
-  while (!glfwWindowShouldClose(window))
+  while (application_active)
   {
     glfwPollEvents();
     ProcessKeyboardInput(window);
@@ -1015,32 +1034,52 @@ s32 main()
       }
     }
 
+/*
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
     // draw ui here
-    ImGui::Begin("Menu");
-    
-    if (ImGui::Button("Load Scene"))
-    {
-      scene_names = LoadSceneSelector();
-    }
+    ImGui::DockSpaceOverViewport();
+    //if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
 
-    for (const auto& scene_name : scene_names)
+    ImGuiWindowFlags window_flags = 0;
+
+    const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 650, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+    
+    ImGui::Begin("UI Test Window", &application_active, window_flags);
+
+    ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
+    if (ImGui::BeginMenuBar())
     {
-      if (ImGui::Button(scene_name.c_str()))
+      if (ImGui::BeginMenu("Menu"))
       {
-        LoadScene(scene_name.c_str());
-        audio_system->playSound(scene_sounds[0], nullptr, false, &audio_channels[0]);
-        scene_names.Clear();
+        ImGui::MenuItem("Do something", nullptr, &debug_menu_clicked);
+        ImGui::EndMenu();
       }
+      if (ImGui::BeginMenu("Tools"))
+      {
+        ImGui::MenuItem("Do something else", nullptr, &debug_tools_clicked);
+        ImGui::MenuItem("Do another thing", nullptr, &debug_other_tools_clicked);
+        ImGui::EndMenu();
+      }
+      ImGui::EndMenuBar();
     }
     
     ImGui::End();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+      ImGui::UpdatePlatformWindows();
+      ImGui::RenderPlatformWindowsDefault();
+      glfwMakeContextCurrent(window);
+    }
+*/
 
     glfwSwapBuffers(window);
 

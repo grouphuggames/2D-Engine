@@ -1037,6 +1037,9 @@ s32 main()
 
   glewInit();
 
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -1080,6 +1083,20 @@ s32 main()
 
   entities.PushBack(megaman);
   StartTimer(megaman_anim.anim_timer);
+
+  Entity cloud;
+  cloud.position = vec2(0.f, 0.f);
+  cloud.scale = vec2(0.25f, 0.25f);
+  cloud.shader = CreateGLShader("entity_textured.glsl");
+  cloud.texture = TextureFromFile("cloud0.png");
+  cloud.angle = 0.f;
+  glGenVertexArrays(1, &cloud.vao);
+  glBindVertexArray(cloud.vao);
+  glGenBuffers(1, &cloud.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, cloud.vbo);
+  glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud.verts[0], GL_STATIC_DRAW);
+
+  entities.PushBack(cloud);
 
   while (application_active)
   {

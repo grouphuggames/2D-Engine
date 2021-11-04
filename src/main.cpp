@@ -27,6 +27,7 @@ using f64 = double;
 
 s32 window_width = 1280;
 s32 window_height = 720;
+f32 aspect_ratio = 0.f;
 
 const f64 PI = 3.14159;
 
@@ -559,6 +560,12 @@ namespace en
 FMOD::System* audio_system;
 FMOD::Channel* audio_channels[4];   // audio system can play up to 4 sounds simultaneously
 
+en::vector<Entity> entities;
+en::vector<vec2> original_scales;
+en::vector<u32> scene_shaders;
+en::vector<u32> scene_textures;
+en::vector<FMOD::Sound*> scene_sounds;
+
 enum class BUTTON_ACTION
 {
   PRESS,
@@ -696,13 +703,17 @@ void MouseButtonCallback(GLFWwindow* window, s32 button, s32 action, s32 mods)
 
 void FramebufferSizeCallback(GLFWwindow* window, s32 width, s32 height)
 {
+  window_width = width;
+  window_height = height;
+  aspect_ratio = (f32)window_width / (f32)window_height;
+
+  for (s32 i = 0; i < entities.Size(); i++)
+  {
+    entities[i].scale = vec2(original_scales[i].x(), original_scales[i].y() * aspect_ratio);
+  }
+
   glViewport(0, 0, width, height);
 }
-
-en::vector<Entity> entities;
-en::vector<u32> scene_shaders;
-en::vector<u32> scene_textures;
-en::vector<FMOD::Sound*> scene_sounds;
 
 en::vector<std::string> LoadSceneSelector()
 {
@@ -850,7 +861,7 @@ void LoadScene(const char* scene_path)
       space = val_str.find(" ");
       tmp_vec[1] = std::stof(val_str.substr(0, space));
 
-      e.scale = vec2(tmp_vec[0], tmp_vec[1]);
+      e.scale = vec2(tmp_vec[0], tmp_vec[1] * aspect_ratio);
 
       new_line = new_line.substr(comma + 2);
       comma = new_line.find(",");
@@ -948,6 +959,7 @@ void LoadScene(const char* scene_path)
       glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &e.verts[0], GL_STATIC_DRAW);
 
       entities.PushBack(e);
+      original_scales.PushBack(vec2(e.scale.x(), e.scale.y() / aspect_ratio));
     }
   }
 }
@@ -1025,6 +1037,7 @@ void RunLeft()
 
 s32 main()
 {
+  aspect_ratio = (f32)window_width / (f32)window_height;
   const char* glsl_version = "#version 330";
   GLFWwindow* window;
   
@@ -1077,7 +1090,7 @@ s32 main()
 
   Entity megaman;
   megaman.position = vec2(0.f, 0.f);
-  megaman.scale = vec2(0.25f, 0.25f);
+  megaman.scale = vec2(0.25f, 0.25f * aspect_ratio);
   megaman.shader = CreateGLShader("entity_animated.glsl");
   megaman.texture = TextureFromFile("megaman_run.jpg");
   megaman.angle = 0.f;
@@ -1088,11 +1101,12 @@ s32 main()
   glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &megaman.verts[0], GL_STATIC_DRAW);
 
   entities.PushBack(megaman);
+  original_scales.PushBack(vec2(megaman.scale.x(), megaman.scale.y() / aspect_ratio));
   StartTimer(megaman_anim.anim_timer);
 
   Entity cloud;
   cloud.position = vec2(0.f, 0.f);
-  cloud.scale = vec2(0.25f, 0.25f);
+  cloud.scale = vec2(0.25f, 0.25f * aspect_ratio);
   cloud.shader = CreateGLShader("entity_textured.glsl");
   cloud.texture = TextureFromFile("cloud0.png");
   cloud.angle = 0.f;
@@ -1103,6 +1117,7 @@ s32 main()
   glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud.verts[0], GL_STATIC_DRAW);
 
   entities.PushBack(cloud);
+  original_scales.PushBack(vec2(cloud.scale.x(), cloud.scale.y() / aspect_ratio));
 
   while (application_active)
   {

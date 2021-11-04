@@ -25,8 +25,8 @@ using u32 = uint32_t;
 using f32  = float;
 using f64 = double;
 
-const s32 window_width = 1280;
-const s32 window_height = 720;
+s32 window_width = 1280;
+s32 window_height = 720;
 
 const f64 PI = 3.14159;
 
@@ -694,6 +694,11 @@ void MouseButtonCallback(GLFWwindow* window, s32 button, s32 action, s32 mods)
   }
 }
 
+void FramebufferSizeCallback(GLFWwindow* window, s32 width, s32 height)
+{
+  glViewport(0, 0, width, height);
+}
+
 en::vector<Entity> entities;
 en::vector<u32> scene_shaders;
 en::vector<u32> scene_textures;
@@ -1034,6 +1039,7 @@ s32 main()
   glfwSwapInterval(1);
   glfwSetMouseButtonCallback(window, MouseButtonCallback);
   glfwSetKeyCallback(window, KeyCallback);
+  glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 
   glewInit();
 

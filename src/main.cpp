@@ -159,6 +159,13 @@ struct vec3
     data[2] = z;
   }
 
+  vec3(const vec2 xy, f32 z)
+  {
+    data[0] = xy.x();
+    data[1] = xy.y();
+    data[2] = z;
+  }
+
   f32 x() const
   {
     return data[0];
@@ -335,13 +342,12 @@ struct Vertex
 {
 public:
   vec2 position;
-  vec4 color;
 };
 
 struct Entity
 {
 public:
-  Vertex verts[4] = { { vec2(-1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(-1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, 1.f), vec4(0.f, 0.f, 0.f, 1.f) }, { vec2(1.f, -1.f), vec4(0.f, 0.f, 0.f, 1.f) } };
+  Vertex verts[4] = { vec2(-1.f, 1.f), vec2(-1.f, -1.f), vec2(1.f, 1.f), vec2(1.f, -1.f) };
   vec2 position;
   vec2 scale;
   u32 vao, vbo;
@@ -863,95 +869,6 @@ void LoadScene(const char* scene_path)
 
       e.scale = vec2(tmp_vec[0], tmp_vec[1] * aspect_ratio);
 
-      new_line = new_line.substr(comma + 2);
-      comma = new_line.find(",");
-      val_str = new_line.substr(0, comma);
-      f32 tmp_vec4[4] = { 0.f, 0.f, 0.f, 0.f };
-
-      space = val_str.find(" ");
-      tmp_vec4[0] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[1] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[2] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[3] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      e.verts[0].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
-
-      new_line = new_line.substr(comma + 2);
-      comma = new_line.find(",");
-      val_str = new_line.substr(0, comma);
-	
-      space = val_str.find(" ");
-      tmp_vec4[0] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[1] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[2] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[3] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      e.verts[1].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
-	
-      new_line = new_line.substr(comma + 2);
-      comma = new_line.find(",");
-      val_str = new_line.substr(0, comma);
-	
-      space = val_str.find(" ");
-      tmp_vec4[0] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[1] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[2] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[3] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      e.verts[2].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
-
-      new_line = new_line.substr(comma + 2);
-      comma = new_line.find(",");
-      val_str = new_line.substr(0, comma);
-	
-      space = val_str.find(" ");
-      tmp_vec4[0] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[1] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[2] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      space = val_str.find(" ");
-      tmp_vec4[3] = std::stof(val_str.substr(0, space));
-      val_str = val_str.substr(space + 1);
-
-      e.verts[3].color = vec4(tmp_vec4[0], tmp_vec4[1], tmp_vec4[2], tmp_vec4[3]);
-
       glGenVertexArrays(1, &e.vao);
       glBindVertexArray(e.vao);
       glGenBuffers(1, &e.vbo);
@@ -994,6 +911,16 @@ struct AnimInfo
 };
 
 AnimInfo megaman_anim = {};
+
+const s32 MAX_PARTICLES = 1000;
+
+struct
+{
+  u32 vao, vbo;
+  en::vector<vec2> position;
+  en::vector<vec2> scale;
+  en::vector<vec4> color;
+} particles;
 
 void RunRight()
 {
@@ -1089,7 +1016,7 @@ s32 main()
   SetKeyboardInput(RunLeft, GLFW_KEY_A, BUTTON_ACTION::HOLD);
 
   Entity megaman;
-  megaman.position = vec2(0.f, 0.f);
+  megaman.position = vec2(0.75f, 0.75f);
   megaman.scale = vec2(0.25f, 0.25f * aspect_ratio);
   megaman.shader = CreateGLShader("entity_animated.glsl");
   megaman.texture = TextureFromFile("megaman_run.jpg");
@@ -1105,7 +1032,7 @@ s32 main()
   StartTimer(megaman_anim.anim_timer);
 
   Entity cloud;
-  cloud.position = vec2(0.f, 0.f);
+  cloud.position = vec2(0.85f, 0.85f);
   cloud.scale = vec2(0.25f, 0.25f * aspect_ratio);
   cloud.shader = CreateGLShader("entity_textured.glsl");
   cloud.texture = TextureFromFile("cloud0.png");
@@ -1118,6 +1045,23 @@ s32 main()
 
   entities.PushBack(cloud);
   original_scales.PushBack(vec2(cloud.scale.x(), cloud.scale.y() / aspect_ratio));
+
+  Vertex particle_verts[4] = { vec2(-1.f, 1.f), vec2(-1.f, -1.f), vec2(1.f, 1.f), vec2(1.f, -1.f) };
+
+  s32 particle_shader = CreateGLShader("particle_basic.glsl");
+
+  for (s32 i = 0; i < 5000; i++)
+  {
+    particles.position.PushBack(vec2(GetRandomFloatInRange(-1.f, 1.f), GetRandomFloatInRange(-1.f, 1.f)));
+    particles.scale.PushBack(vec2(0.05f, 0.05f));
+    particles.color.PushBack(vec4(GetRandomFloat(), GetRandomFloat(), GetRandomFloat(), GetRandomFloat()));
+  }
+
+  glGenVertexArrays(1, &particles.vao);
+  glBindVertexArray(particles.vao);
+  glGenBuffers(1, &particles.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, particles.vbo);
+  glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &particle_verts[0], GL_STATIC_DRAW);
 
   while (application_active)
   {
@@ -1161,16 +1105,37 @@ s32 main()
 
         glBindVertexArray(e.vao);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(f32), (void*)(sizeof(vec2)));
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, e.texture);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
       }
     }
 
+    // let's try switching to a batch rendering method
+    // as of right now, rendering 5000 particles on screen results in an average
+    // frame time of around 13ms
+    for (s32 i = 0; i < particles.position.Size(); i++)
+    {
+      mat4 transform = mat4::Identity();
+      transform = mat4::Translate(vec3(particles.position[i], 0.f));
+      transform *= mat4::Rotate(0.f, vec3(0.f, 0.f, 1.f));
+      transform *= mat4::Scale(vec3(particles.scale[i].x(), particles.scale[i].y() * aspect_ratio, 1.f));
+
+      glUseProgram(particle_shader);
+      glUniform1f(glGetUniformLocation(particle_shader, "aspect_ratio"), aspect_ratio);
+      glUniformMatrix4fv(glGetUniformLocation(particle_shader, "transform"), 1, GL_FALSE, transform.elements);
+      glUniform4fv(glGetUniformLocation(particle_shader, "color"), 1, &particles.color[i].data[0]);
+
+      glBindVertexArray(particles.vao);
+      glEnableVertexAttribArray(0);
+      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+
     glfwSwapBuffers(window);
+    DebugPrintToConsole("Frame Time: ", delta_time, "s");
+    DebugPrintToConsole("Framerate: ", 1.f / delta_time);
 
     game_time = (f32)GetTimerValue(game_timer) / 1000.f;
     StopTimer(frame_timer);

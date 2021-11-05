@@ -151,6 +151,13 @@ struct vec3
     data[1] = 0.f;
     data[2] = 0.f;
   }
+
+  vec3(f32 val)
+  {
+    data[0] = val;
+    data[1] = val;
+    data[2] = val;
+  }
   
   vec3(f32 x, f32 y, f32 z)
   {
@@ -209,6 +216,14 @@ public:
     data[1] = 0.f;
     data[2] = 0.f;
     data[3] = 0.f;
+  }
+
+  vec4(f32 val)
+  {
+    data[0] = val;
+    data[1] = val;
+    data[2] = val;
+    data[3] = val;
   }
   
   vec4(f32 x, f32 y, f32 z, f32 w)
@@ -340,17 +355,26 @@ public:
 
 struct Vertex
 {
-public:
   vec2 position;
 };
+
+struct ParticleVertex
+{
+  vec2 position;
+  vec4 color;
+  vec2 texture_coords;
+  f32 texture_index;
+};
+
+u32 quad_indices[] = { 0, 1, 3, 1, 2, 3 };
 
 struct Entity
 {
 public:
-  Vertex verts[4] = { vec2(-1.f, 1.f), vec2(-1.f, -1.f), vec2(1.f, 1.f), vec2(1.f, -1.f) };
+  Vertex verts[4] = { vec2(1.f, 1.f), vec2(1.f, -1.f), vec2(-1.f, -1.f), vec2(-1.f, 1.f) };
   vec2 position;
   vec2 scale;
-  u32 vao, vbo;
+  u32 vao, vbo, ebo;
   u32 shader;
   u32 texture;
   f32 angle = 0.f;
@@ -872,8 +896,11 @@ void LoadScene(const char* scene_path)
       glGenVertexArrays(1, &e.vao);
       glBindVertexArray(e.vao);
       glGenBuffers(1, &e.vbo);
+      glGenBuffers(1, &e.ebo);
       glBindBuffer(GL_ARRAY_BUFFER, e.vbo);
       glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &e.verts[0], GL_STATIC_DRAW);
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, e.ebo);
+      glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(u32), quad_indices, GL_STATIC_DRAW);
 
       entities.PushBack(e);
       original_scales.PushBack(vec2(e.scale.x(), e.scale.y() / aspect_ratio));
@@ -912,11 +939,12 @@ struct AnimInfo
 
 AnimInfo megaman_anim = {};
 
-const s32 MAX_PARTICLES = 1000;
+const s32 MAX_PARTICLES = 5000;
+s32 particle_textures[5];
 
 struct
 {
-  u32 vao, vbo;
+  u32 vao, vbo, ebo;
   en::vector<vec2> position;
   en::vector<vec2> scale;
   en::vector<vec4> color;
@@ -1015,6 +1043,12 @@ s32 main()
   SetKeyboardInput(RunRight, GLFW_KEY_D, BUTTON_ACTION::HOLD);
   SetKeyboardInput(RunLeft, GLFW_KEY_A, BUTTON_ACTION::HOLD);
 
+  particle_textures[0] = TextureFromFile("cloud0.png");
+  particle_textures[1] = TextureFromFile("cloud1.png");
+  particle_textures[2] = TextureFromFile("cloud2.png");
+  particle_textures[3] = TextureFromFile("cloud3.png");
+  particle_textures[4] = TextureFromFile("cloud4.png");
+
   Entity megaman;
   megaman.position = vec2(0.75f, 0.75f);
   megaman.scale = vec2(0.25f, 0.25f * aspect_ratio);
@@ -1022,46 +1056,89 @@ s32 main()
   megaman.texture = TextureFromFile("megaman_run.jpg");
   megaman.angle = 0.f;
   glGenVertexArrays(1, &megaman.vao);
-  glBindVertexArray(megaman.vao);
   glGenBuffers(1, &megaman.vbo);
+  glGenBuffers(1, &megaman.ebo);
+  glBindVertexArray(megaman.vao);
   glBindBuffer(GL_ARRAY_BUFFER, megaman.vbo);
   glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &megaman.verts[0], GL_STATIC_DRAW);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, megaman.ebo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(u32), quad_indices, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);
 
   entities.PushBack(megaman);
   original_scales.PushBack(vec2(megaman.scale.x(), megaman.scale.y() / aspect_ratio));
   StartTimer(megaman_anim.anim_timer);
 
-  Entity cloud;
-  cloud.position = vec2(0.85f, 0.85f);
-  cloud.scale = vec2(0.25f, 0.25f * aspect_ratio);
-  cloud.shader = CreateGLShader("entity_textured.glsl");
-  cloud.texture = TextureFromFile("cloud0.png");
-  cloud.angle = 0.f;
-  glGenVertexArrays(1, &cloud.vao);
-  glBindVertexArray(cloud.vao);
-  glGenBuffers(1, &cloud.vbo);
-  glBindBuffer(GL_ARRAY_BUFFER, cloud.vbo);
-  glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud.verts[0], GL_STATIC_DRAW);
+  //Entity cloud;
+  //cloud.position = vec2(0.85f, -0.85f);
+  //cloud.scale = vec2(0.25f, 0.25f * aspect_ratio);
+  //cloud.shader = CreateGLShader("entity_textured.glsl");
+  //cloud.texture = TextureFromFile("cloud0.png");
+  //cloud.angle = 0.f;
+  //glGenVertexArrays(1, &cloud.vao);
+  //glGenBuffers(1, &cloud.vbo);
+  //glGenBuffers(1, &cloud.ebo);
+  //glBindVertexArray(cloud.vao);
+  //glBindBuffer(GL_ARRAY_BUFFER, cloud.vbo);
+  //glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud.verts[0], GL_STATIC_DRAW);
+  //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cloud.ebo);
+  //glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(u32), quad_indices, GL_STATIC_DRAW);
+  //glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
+  //glEnableVertexAttribArray(0);
+  //glBindBuffer(GL_ARRAY_BUFFER, 0);
+  //glBindVertexArray(0);
+//
+  //entities.PushBack(cloud);
+  //original_scales.PushBack(vec2(cloud.scale.x(), cloud.scale.y() / aspect_ratio));
 
-  entities.PushBack(cloud);
-  original_scales.PushBack(vec2(cloud.scale.x(), cloud.scale.y() / aspect_ratio));
+  en::vector<ParticleVertex> particle_verts;
+  en::vector<u32> particle_indices;
 
-  Vertex particle_verts[4] = { vec2(-1.f, 1.f), vec2(-1.f, -1.f), vec2(1.f, 1.f), vec2(1.f, -1.f) };
+  s32 particle_shader = CreateGLShader("particle_textured.glsl");
+  glUseProgram(particle_shader);
+  s32 samplers[5] = { 0, 1, 2, 3, 4 };
+  glUniform1iv(glGetUniformLocation(particle_shader, "textures"), 5, samplers);
 
-  s32 particle_shader = CreateGLShader("particle_basic.glsl");
-
-  for (s32 i = 0; i < 5000; i++)
+  for (s32 i = 0; i < MAX_PARTICLES; i++)
   {
     particles.position.PushBack(vec2(GetRandomFloatInRange(-1.f, 1.f), GetRandomFloatInRange(-1.f, 1.f)));
     particles.scale.PushBack(vec2(0.05f, 0.05f));
     particles.color.PushBack(vec4(GetRandomFloat(), GetRandomFloat(), GetRandomFloat(), GetRandomFloat()));
+
+    particle_verts.PushBack({ vec2(0.1f + particles.position[i].x(), 0.1f + particles.position[i].y()), vec4(particles.color[i]), vec2(0.f, 0.f), 5.f * GetRandomFloat() });
+    particle_verts.PushBack({ vec2(0.1f + particles.position[i].x(), -0.1f + particles.position[i].y()), vec4(particles.color[i]), vec2(1.f, 0.f), 5.f * GetRandomFloat() });
+    particle_verts.PushBack({ vec2(-0.1f + particles.position[i].x(), -0.1f + particles.position[i].y()), vec4(particles.color[i]), vec2(1.f, 1.f), 5.f * GetRandomFloat() });
+    particle_verts.PushBack({ vec2(-0.1f + particles.position[i].x(), 0.1f + particles.position[i].y()), vec4(particles.color[i]), vec2(0.f, 1.f), 5.f * GetRandomFloat() });
+
+    particle_indices.PushBack(0 + i * 4);
+    particle_indices.PushBack(1 + i * 4);
+    particle_indices.PushBack(3 + i * 4);
+    particle_indices.PushBack(1 + i * 4);
+    particle_indices.PushBack(2 + i * 4);
+    particle_indices.PushBack(3 + i * 4);
   }
 
   glGenVertexArrays(1, &particles.vao);
-  glBindVertexArray(particles.vao);
   glGenBuffers(1, &particles.vbo);
+  glGenBuffers(1, &particles.ebo);
+  glBindVertexArray(particles.vao);
   glBindBuffer(GL_ARRAY_BUFFER, particles.vbo);
-  glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &particle_verts[0], GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, particles.position.Size() * 4 * sizeof(ParticleVertex), &particle_verts[0], GL_STATIC_DRAW);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, particles.ebo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, particles.position.Size() * 6 * sizeof(u32), &particle_indices[0], GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 9 * sizeof(f32), (void*)0);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 9 * sizeof(f32), (void*)(2 * sizeof(f32)));
+  glEnableVertexAttribArray(1);
+  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 9 * sizeof(f32), (void*)(2 * sizeof(f32) + 4 * sizeof(f32)));
+  glEnableVertexAttribArray(2);
+  glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 9 * sizeof(f32), (void*)(2 * sizeof(f32) + 4 * sizeof(f32) + 2 * sizeof(f32)));
+  glEnableVertexAttribArray(3);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);
 
   while (application_active)
   {
@@ -1104,38 +1181,31 @@ s32 main()
         }
 
         glBindVertexArray(e.vao);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, e.texture);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
       }
     }
 
-    // let's try switching to a batch rendering method
-    // as of right now, rendering 5000 particles on screen results in an average
-    // frame time of around 13ms
-    for (s32 i = 0; i < particles.position.Size(); i++)
-    {
-      mat4 transform = mat4::Identity();
-      transform = mat4::Translate(vec3(particles.position[i], 0.f));
-      transform *= mat4::Rotate(0.f, vec3(0.f, 0.f, 1.f));
-      transform *= mat4::Scale(vec3(particles.scale[i].x(), particles.scale[i].y() * aspect_ratio, 1.f));
+    mat4 particle_transform = mat4::Identity();
+    glUseProgram(particle_shader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, particle_textures[0]);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, particle_textures[1]);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, particle_textures[2]);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, particle_textures[3]);
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, particle_textures[4]);
+    glUniformMatrix4fv(glGetUniformLocation(particle_shader, "transform"), 1, GL_FALSE, particle_transform.elements);
 
-      glUseProgram(particle_shader);
-      glUniform1f(glGetUniformLocation(particle_shader, "aspect_ratio"), aspect_ratio);
-      glUniformMatrix4fv(glGetUniformLocation(particle_shader, "transform"), 1, GL_FALSE, transform.elements);
-      glUniform4fv(glGetUniformLocation(particle_shader, "color"), 1, &particles.color[i].data[0]);
-
-      glBindVertexArray(particles.vao);
-      glEnableVertexAttribArray(0);
-      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
-      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    }
+    glBindVertexArray(particles.vao);
+    glDrawElements(GL_TRIANGLES, 6 * particles.position.Size(), GL_UNSIGNED_INT, 0);
 
     glfwSwapBuffers(window);
     DebugPrintToConsole("Frame Time: ", delta_time, "s");
-    DebugPrintToConsole("Framerate: ", 1.f / delta_time);
 
     game_time = (f32)GetTimerValue(game_timer) / 1000.f;
     StopTimer(frame_timer);

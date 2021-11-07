@@ -1,3 +1,0 @@
-C:/2D-Engine/build/CMakeFiles/Engine.dir
-C:/2D-Engine/build/CMakeFiles/ALL_BUILD.dir
-C:/2D-Engine/build/CMakeFiles/ZERO_CHECK.dir

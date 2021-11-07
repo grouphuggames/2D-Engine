@@ -585,6 +585,58 @@ namespace en
       return size;
     }
   };
+
+  template <typename T1, typename T2>
+  class unordered_map
+  {
+    s32 size = 0;
+    s32 find_index = -1;
+
+  public:
+    en::vector<T1> keys;
+    en::vector<T2> values;
+
+    unordered_map<T1, T2>() {}
+
+    void Insert(T1 key, T2 val)
+    {
+      keys.PushBack(key);
+      values.PushBack(val);
+      size++;
+    }
+
+    bool Find(T1 key)
+    {
+      bool found = false;
+
+      for (s32 i = 0; i < size; i++)
+      {
+        if (key == keys[i])
+        {
+          find_index = i;
+          found = true;
+          break;
+        }
+      }
+
+      return found;
+    }
+
+    T2& At(T1 key)
+    {
+      if (Find(key))
+      {
+        return values[find_index];
+      }
+
+      return T2();
+    }
+
+    s32 Size() const
+    {
+      return size;
+    }
+  };
 }
 
 FMOD::System* audio_system;
@@ -619,33 +671,10 @@ struct FuncInfo
   BUTTON_ACTION action;
 };
 
-struct GLFWFuncInfo
-{
-  GLFWInputFunc func;
-  BUTTON_ACTION action;
-};
-
 static struct
 {
-  std::unordered_map<s32, FuncInfo> InputFuncs = {};
-  std::unordered_map<s32, GLFWFuncInfo> GLFWInputFuncs = {};
+  en::unordered_map<s32, FuncInfo> _InputFuncs = {};
 } input_wrapper;
-
-void SetKeyboardInput(GLFWInputFunc func, s32 button, BUTTON_ACTION action)
-{
-  GLFWFuncInfo f;
-  f.func = func;
-  f.action = action;
-
-  if (input_wrapper.GLFWInputFuncs.find(button) == input_wrapper.GLFWInputFuncs.end())
-  {
-    input_wrapper.GLFWInputFuncs.insert({ button, f });
-  }
-  else
-  {
-    input_wrapper.GLFWInputFuncs.at(button) = f;
-  }
-}
 
 void SetKeyboardInput(InputFunc func, s32 button, BUTTON_ACTION action)
 {
@@ -653,13 +682,13 @@ void SetKeyboardInput(InputFunc func, s32 button, BUTTON_ACTION action)
   f.func = func;
   f.action = action;
 
-  if (input_wrapper.InputFuncs.find(button) == input_wrapper.InputFuncs.end())
+  if (input_wrapper._InputFuncs.Find(button) == false)
   {
-    input_wrapper.InputFuncs.insert({ button, f });
+    input_wrapper._InputFuncs.Insert(button, f);
   }
   else
   {
-    input_wrapper.InputFuncs.at(button) = f;
+    input_wrapper._InputFuncs.At(button) = f;
   }
 }
 
@@ -677,16 +706,16 @@ void ProcessKeyboardInput(GLFWwindow* window)
 {
   for (s32 i = 0; i < (sizeof(possible_keybindings) / sizeof(possible_keybindings[0])); i++)
   {
-    if (glfwGetKey(window, possible_keybindings[i]) == GLFW_PRESS && input_wrapper.InputFuncs.at(possible_keybindings[i]).action == BUTTON_ACTION::HOLD)
+    if (glfwGetKey(window, possible_keybindings[i]) == GLFW_PRESS && input_wrapper._InputFuncs.At(possible_keybindings[i]).action == BUTTON_ACTION::HOLD)
     {
-      try
-      {
-        input_wrapper.InputFuncs.at(possible_keybindings[i]).func();
-      }
-      catch (const std::exception&)
-      {
-        return;
-      }
+        if (!input_wrapper._InputFuncs.At(possible_keybindings[i]).func)
+        {
+            DebugPrintToConsole("Empty function!");
+        }
+        else
+        {
+            input_wrapper._InputFuncs.At(possible_keybindings[i]).func();
+        }
     }
   }
 }
@@ -697,22 +726,15 @@ void KeyCallback(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods
   {
     if (key == possible_keybindings[i] && action == GLFW_PRESS)
     {
-      if (input_wrapper.InputFuncs.at(key).action == BUTTON_ACTION::PRESS)
+      if (input_wrapper._InputFuncs.At(key).action == BUTTON_ACTION::PRESS)
       {
         try
         {
-          input_wrapper.InputFuncs.at(key).func();
+          input_wrapper._InputFuncs.At(key).func();
         }
         catch (const std::exception&)
         {
-          try
-          {
-            input_wrapper.GLFWInputFuncs.at(key).func(window);
-          }
-          catch (std::exception&)
-          {
             return;
-          }
         }
       }
     }
@@ -765,6 +787,7 @@ en::vector<std::string> LoadSceneSelector()
 void LoadScene(const char* scene_path)
 {
   entities.Clear();
+  original_scales.Clear();
   scene_shaders.Clear();
   scene_textures.Clear();
   scene_sounds.Clear();
@@ -894,13 +917,17 @@ void LoadScene(const char* scene_path)
       e.scale = vec2(tmp_vec[0], tmp_vec[1] * aspect_ratio);
 
       glGenVertexArrays(1, &e.vao);
-      glBindVertexArray(e.vao);
       glGenBuffers(1, &e.vbo);
       glGenBuffers(1, &e.ebo);
+      glBindVertexArray(e.vao);
       glBindBuffer(GL_ARRAY_BUFFER, e.vbo);
       glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &e.verts[0], GL_STATIC_DRAW);
       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, e.ebo);
       glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(u32), quad_indices, GL_STATIC_DRAW);
+      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
+      glEnableVertexAttribArray(0);
+      glBindBuffer(GL_ARRAY_BUFFER, 0);
+      glBindVertexArray(0);
 
       entities.PushBack(e);
       original_scales.PushBack(vec2(e.scale.x(), e.scale.y() / aspect_ratio));
@@ -912,10 +939,9 @@ en::vector<std::string> scene_names;
 
 bool application_active = true;
 
-void CloseWindow(GLFWwindow* window)
+void CloseWindow()
 {
   application_active = false;
-  glfwSetWindowShouldClose(window, application_active);
 }
 
 void Hit()
@@ -1140,6 +1166,8 @@ s32 main()
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
 
+  LoadScene(AssetPath("test_scene.enscene").c_str());
+
   while (application_active)
   {
     glfwPollEvents();
@@ -1161,23 +1189,26 @@ s32 main()
 
         glUseProgram(e.shader);
         glUniformMatrix4fv(glGetUniformLocation(e.shader, "transform"), 1, GL_FALSE, transform.elements);
-        if (megaman_anim.anim_state == ANIM_STATE::ACTIVE)
+        if (e.shader == megaman.shader)
         {
-          glUniform1i(glGetUniformLocation(e.shader, "anim_frame"), megaman_anim.anim_frame);
-        }
-        else
-        {
-          megaman_anim.anim_frame = 0;
-          glUniform1i(glGetUniformLocation(e.shader, "anim_frame"), megaman_anim.anim_frame);
-        }
-
-        if (megaman_anim.anim_flipped)
-        {
-          glUniform1f(glGetUniformLocation(e.shader, "anim_flip_val"), -1.f);
-        }
-        else
-        {
-          glUniform1f(glGetUniformLocation(e.shader, "anim_flip_val"), 1.f);
+          if (megaman_anim.anim_state == ANIM_STATE::ACTIVE)
+          {
+            glUniform1i(glGetUniformLocation(e.shader, "anim_frame"), megaman_anim.anim_frame);
+          }
+          else
+          {
+            megaman_anim.anim_frame = 0;
+            glUniform1i(glGetUniformLocation(e.shader, "anim_frame"), megaman_anim.anim_frame);
+          }
+        
+          if (megaman_anim.anim_flipped)
+          {
+            glUniform1f(glGetUniformLocation(e.shader, "anim_flip_val"), -1.f);
+          }
+          else
+          {
+            glUniform1f(glGetUniformLocation(e.shader, "anim_flip_val"), 1.f);
+          }
         }
 
         glBindVertexArray(e.vao);
@@ -1202,16 +1233,18 @@ s32 main()
     glUniformMatrix4fv(glGetUniformLocation(particle_shader, "transform"), 1, GL_FALSE, particle_transform.elements);
 
     glBindVertexArray(particles.vao);
-    glDrawElements(GL_TRIANGLES, 6 * particles.position.Size(), GL_UNSIGNED_INT, 0);
+    //glDrawElements(GL_TRIANGLES, 6 * particles.position.Size(), GL_UNSIGNED_INT, 0);
 
     glfwSwapBuffers(window);
-    DebugPrintToConsole("Frame Time: ", delta_time, "s");
+    //DebugPrintToConsole("Frame Time: ", delta_time, "s");
 
     game_time = (f32)GetTimerValue(game_timer) / 1000.f;
     StopTimer(frame_timer);
     delta_time = frame_timer.time_delta / 1000.f;
     megaman_anim.anim_state = ANIM_STATE::INACTIVE;
   }
+
+  DebugPrintToConsole("Clean program exit");
 
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();

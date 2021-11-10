@@ -1,8 +1,8 @@
 #define GLEW_STATIC
 
 #include <iostream>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include "glew/glew.h"
+#include "glfw/glfw3.h"
 #include <cstdint>
 #include <fstream>
 #include <sstream>
@@ -12,11 +12,11 @@
 #include <chrono>
 #include <filesystem>
 #include <random>
-#include "imgui.h"
-#include "imgui_impl_opengl3.h"
-#include "imgui_impl_glfw.h"
-#include "fmod.hpp"
-#include "stb_image.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_opengl3.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "fmod/fmod.hpp"
+#include "stb/stb_image.h"
 
 
 using s32 = int32_t;
@@ -1235,8 +1235,10 @@ s32 main()
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
 
-  LoadScene("test_scene.enscene");
+  //LoadScene("test_scene.enscene");
   PlaySound("MainTheme.wav");
+
+  bool show_demo_window = true;
 
   while (application_active)
   {
@@ -1304,6 +1306,22 @@ s32 main()
 
     glBindVertexArray(particles.vao);
     //glDrawElements(GL_TRIANGLES, 6 * particles.position.Size(), GL_UNSIGNED_INT, 0);
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
+
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+      ImGui::UpdatePlatformWindows();
+      ImGui::RenderPlatformWindowsDefault();
+      glfwMakeContextCurrent(window);
+    }
 
     glfwSwapBuffers(window);
     //DebugPrintToConsole("Frame Time: ", delta_time, "s");

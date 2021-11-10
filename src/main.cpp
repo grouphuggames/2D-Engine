@@ -1,6 +1,5 @@
 #define GLEW_STATIC
 
-#include <iostream>
 #include "glew/glew.h"
 #include "glfw/glfw3.h"
 #include <cstdint>
@@ -17,12 +16,13 @@
 #include "imgui/imgui_impl_glfw.h"
 #include "fmod/fmod.hpp"
 #include "stb/stb_image.h"
-
-
-using s32 = int32_t;
-using u32 = uint32_t;
-using f32  = float;
-using f64 = double;
+#include "vec2.h"
+#include "vec3.h"
+#include "vec4.h"
+#include "mat4.h"
+#include "vector.h"
+#include "unordered_map.h"
+#include "Timer.h"
 
 
 s32 window_width = 1280;
@@ -36,16 +36,6 @@ static inline f32 ToRadians(f32 degrees)
   return degrees * ((f32)PI / 180.f);
 }
 
-static void DebugPrintToConsole() {}
-
-template<typename T, typename... Types>
-static void DebugPrintToConsole(T var1, Types... var2)
-{
-  std::cout << var1;
-  DebugPrintToConsole(var2...);
-  std::cout << '\n';
-}
-
 std::string AssetPath(const char* filename)
 {
   std::string prefix = "../../assets/";
@@ -56,118 +46,6 @@ std::string AssetPath(std::string path)
 {
   std::string prefix = "../../assets/";
   return prefix.append(path);
-}
-
-namespace en
-{
-  template <typename T>
-  class vector
-  {
-    T* data;
-    s32 capacity;
-    s32 size;
-
-  public:
-    vector<T>() : capacity(10), size(0) { data = new T[capacity]; }
-    vector<T>(s32 _size) : capacity(_size + 1), size(0) { data = new T[capacity]; }
-
-    T* begin() { return &data[0]; }
-    T* end() { return &data[size]; }
-
-    T& operator[](s32 index) { return data[index]; }
-
-    void Resize(s32 _size)
-    {
-      T* new_arr = new T[_size];
-
-      for (s32 i = 0; i < size; ++i) { new_arr[i] = data[i]; }
-      capacity = _size;
-
-      delete[] data;
-      data = nullptr;
-      data = new_arr;
-    }
-
-    void PushBack(T val)
-    {
-      if (size >= capacity) Resize(2 * capacity);
-
-      data[size] = val;
-      ++size;
-    }
-
-    void Clear()
-    {
-      en::vector<T> tmp_vec;
-      *this = tmp_vec;
-    }
-
-    s32 Size() const
-    {
-      return size;
-    }
-  };
-
-  template <typename T1, typename T2>
-  class unordered_map
-  {
-    s32 size = 0;
-    s32 find_index = -1;
-
-  public:
-    en::vector<T1> keys;
-    en::vector<T2> values;
-
-    unordered_map<T1, T2>() {}
-
-    void Insert(T1 key, T2 val)
-    {
-      keys.PushBack(key);
-      values.PushBack(val);
-      size++;
-    }
-
-    bool Find(T1 key)
-    {
-      bool found = false;
-
-      for (s32 i = 0; i < size; i++)
-      {
-        if (key == keys[i])
-        {
-          find_index = i;
-          found = true;
-          break;
-        }
-      }
-
-      return found;
-    }
-
-    T2 At(T1 key)
-    {
-      if (Find(key))
-      {
-        return values[find_index];
-      }
-
-      return T2();
-    }
-
-    s32 Size() const
-    {
-      return size;
-    }
-
-    void Clear()
-    {
-      keys.Clear();
-      values.Clear();
-
-      size = 0;
-      find_index = -1;
-    }
-  };
 }
 
 /// Audio API Reference
@@ -394,298 +272,9 @@ f32 GetRandomFloatInRange(f32 lower, f32 upper)
   return distribution(generator);
 }
 
-enum class TIME
-{
-  NANOSECOND,
-  MICROSECOND,
-  MILLISECOND
-};
-
-struct TimerInfo
-{
-  TIME time_scale = TIME::MILLISECOND;
-  std::chrono::time_point<std::chrono::steady_clock> timer_start;
-  std::chrono::time_point<std::chrono::steady_clock> timer_stop;
-  u32 time_delta;
-};
-
-void StartTimer(TimerInfo& info)
-{
-  info.timer_start = std::chrono::high_resolution_clock::now();
-}
-
-u32 GetTimerValue(TimerInfo& info)
-{
-  auto current_time = std::chrono::high_resolution_clock::now();
-  if (info.time_scale == TIME::NANOSECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - info.timer_start).count();
-  else if (info.time_scale == TIME::MICROSECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::microseconds>(current_time - info.timer_start).count();
-  else if (info.time_scale == TIME::MILLISECOND)
-    return (u32)std::chrono::duration_cast<std::chrono::milliseconds>(current_time - info.timer_start).count();
-
-  return 0;
-}
-
-void StopTimer(TimerInfo& info)
-{
-  info.timer_stop = std::chrono::high_resolution_clock::now();
-  if (info.time_scale == TIME::NANOSECOND)
-    info.time_delta = (u32)std::chrono::duration_cast<std::chrono::nanoseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == TIME::MICROSECOND)
-    info.time_delta = (u32)std::chrono::duration_cast<std::chrono::microseconds>(info.timer_stop - info.timer_start).count();
-  else if (info.time_scale == TIME::MILLISECOND)
-    info.time_delta = (u32)std::chrono::duration_cast<std::chrono::milliseconds>(info.timer_stop - info.timer_start).count();
-}
-
 TimerInfo game_timer;
 TimerInfo frame_timer;
 f32 game_time = 0.f;
-
-struct vec2
-{
-public:
-  f32 data[2];
-
-  vec2()
-  {
-    data[0] = 0.f;
-    data[1] = 0.f;
-  }
-  
-  vec2(f32 x, f32 y)
-  {
-    data[0] = x;
-    data[1] = y;
-  }
-
-  f32 x() const
-  {
-    return data[0];
-  }
-
-  f32 y() const
-  {
-    return data[1];
-  }
-};
-
-void DebugPrintVec2(vec2 vec)
-{
-  DebugPrintToConsole("{ ", vec.x(), ", ", vec.y(), " }");
-}
-
-struct vec3
-{
-  f32 data[3];
-
-  vec3()
-  {
-    data[0] = 0.f;
-    data[1] = 0.f;
-    data[2] = 0.f;
-  }
-
-  vec3(f32 val)
-  {
-    data[0] = val;
-    data[1] = val;
-    data[2] = val;
-  }
-  
-  vec3(f32 x, f32 y, f32 z)
-  {
-    data[0] = x;
-    data[1] = y;
-    data[2] = z;
-  }
-
-  vec3(const vec2 xy, f32 z)
-  {
-    data[0] = xy.x();
-    data[1] = xy.y();
-    data[2] = z;
-  }
-
-  f32 x() const
-  {
-    return data[0];
-  }
-
-  f32 y() const
-  {
-    return data[1];
-  }
-
-  f32 z() const
-  {
-    return data[2];
-  }
-
-  static f32 Length(const vec3& vec)
-  {
-    return sqrtf(vec.x() * vec.x() + vec.y() * vec.y() + vec.z() * vec.z());
-  }
-
-  static vec3 Normalize(const vec3& vec)
-  {
-    f32 k = Length(vec);
-    return vec3(vec.x() / k, vec.y() / k, vec.z() / k);
-  }
-};
-
-void DebugPrintVec3(vec3 vec)
-{
-  DebugPrintToConsole("{ ", vec.x(), ", ", vec.y(), ", ", vec.z(), " }");
-}
-
-struct vec4
-{
-public:
-  f32 data[4];
-  
-  vec4()
-  {
-    data[0] = 0.f;
-    data[1] = 0.f;
-    data[2] = 0.f;
-    data[3] = 0.f;
-  }
-
-  vec4(f32 val)
-  {
-    data[0] = val;
-    data[1] = val;
-    data[2] = val;
-    data[3] = val;
-  }
-  
-  vec4(f32 x, f32 y, f32 z, f32 w)
-  {
-    data[0] = x;
-    data[1] = y;
-    data[2] = z;
-    data[3] = w;
-  }
-
-  f32 x() const
-  {
-    return data[0];
-  }
-
-  f32 y() const
-  {
-    return data[1];
-  }
-
-  f32 z() const
-  {
-    return data[2];
-  }
-
-  f32 w() const
-  {
-    return data[3];
-  }
-};
-
-void DebugPrintVec4(vec4 vec)
-{
-  DebugPrintToConsole("{ ", vec.x(), ", ", vec.y(), ", ", vec.z(), ", ", vec.w(), " }");
-}
-
-class mat4
-{
-public:
-  f32 elements[16] = {};
-
-  mat4() {}
-
-  static mat4 Identity()
-  {
-    mat4 result;
-
-    result.elements[0] = 1.f;
-    result.elements[5] = 1.f;
-    result.elements[10] = 1.f;
-    result.elements[15] = 1.f;
-
-    return result;
-  }
-
-  static mat4 Translate(const vec3& translation)
-  {
-    mat4 result = Identity();
-
-    result.elements[12] = translation.x();
-    result.elements[13] = translation.y();
-    result.elements[14] = translation.z();
-
-    return result;
-  }
-
-  static mat4 Rotate(f32 angle, const vec3& axis)
-  {
-    f32 sine = sinf(angle);
-    f32 cosine = cosf(angle);
-    f32 one_minus_cosine = 1.f - cosine;
-    vec3 norm_axis = vec3::Normalize(axis);
-
-    mat4 result = mat4::Identity();
-
-    result.elements[0] = cosine + norm_axis.x() * norm_axis.x() * one_minus_cosine;
-    result.elements[1] = norm_axis.x() * norm_axis.y() * one_minus_cosine + norm_axis.z() * sine;
-    result.elements[2] = norm_axis.x() * norm_axis.z() * one_minus_cosine - norm_axis.y() * sine;
-    result.elements[4] = norm_axis.y() * norm_axis.x() * one_minus_cosine - norm_axis.z() * sine;
-    result.elements[5] = cosine + norm_axis.y() * norm_axis.y() * one_minus_cosine;
-    result.elements[6] = norm_axis.y() * norm_axis.z() * one_minus_cosine + norm_axis.x() * sine;
-    result.elements[8] = norm_axis.z() * norm_axis.x() * one_minus_cosine + norm_axis.y() * sine;
-    result.elements[9] = norm_axis.z() * norm_axis.y() * one_minus_cosine - norm_axis.x() * sine;
-    result.elements[10] = cosine + norm_axis.z() * norm_axis.z() * one_minus_cosine;
-    result.elements[15] = 1.f;
-
-    return result;
-  }
-
-  static mat4 Scale(const vec3& scale)
-  {
-    mat4 result = Identity();
-
-    result.elements[0] = scale.x();
-    result.elements[5] = scale.y();
-    result.elements[10] = scale.z();
-
-    return result;
-  }
-
-  friend mat4 operator*(mat4 left, const mat4& right)
-  {
-    mat4 result;
-
-    for (s32 y = 0; y < 4; y++)
-    {
-      for (s32 x = 0; x < 4; x++)
-      {
-	f32 sum = 0.f;
-
-	for (s32 e = 0; e < 4; e++)
-	{
-	  sum += left.elements[x + e * 4] * right.elements[e + y * 4];
-	}
-
-	result.elements[x + y * 4] = sum;
-      }
-    }
-
-    return result;
-  }
-
-  mat4& operator*=(const mat4& other)
-  {
-    *this = *this * other;
-    return *this;
-  }
-};
 
 struct Vertex
 {
@@ -1167,28 +756,6 @@ s32 main()
   original_scales.PushBack(vec2(megaman.scale.x(), megaman.scale.y() / aspect_ratio));
   StartTimer(megaman_anim.anim_timer);
 
-  //Entity cloud;
-  //cloud.position = vec2(0.85f, -0.85f);
-  //cloud.scale = vec2(0.25f, 0.25f * aspect_ratio);
-  //cloud.shader = LoadGLShader("entity_textured.glsl");
-  //cloud.texture = TextureFromFile("cloud0.png");
-  //cloud.angle = 0.f;
-  //glGenVertexArrays(1, &cloud.vao);
-  //glGenBuffers(1, &cloud.vbo);
-  //glGenBuffers(1, &cloud.ebo);
-  //glBindVertexArray(cloud.vao);
-  //glBindBuffer(GL_ARRAY_BUFFER, cloud.vbo);
-  //glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), &cloud.verts[0], GL_STATIC_DRAW);
-  //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cloud.ebo);
-  //glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(u32), quad_indices, GL_STATIC_DRAW);
-  //glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
-  //glEnableVertexAttribArray(0);
-  //glBindBuffer(GL_ARRAY_BUFFER, 0);
-  //glBindVertexArray(0);
-//
-  //entities.PushBack(cloud);
-  //original_scales.PushBack(vec2(cloud.scale.x(), cloud.scale.y() / aspect_ratio));
-
   en::vector<ParticleVertex> particle_verts;
   en::vector<u32> particle_indices;
 
@@ -1236,7 +803,7 @@ s32 main()
   glBindVertexArray(0);
 
   //LoadScene("test_scene.enscene");
-  PlaySound("MainTheme.wav");
+  //PlaySound("MainTheme.wav");
 
   bool show_demo_window = true;
 

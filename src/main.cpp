@@ -25,6 +25,13 @@ using u32 = uint32_t;
 using f32  = float;
 using f64 = double;
 
+
+
+/// Graphics API Reference
+////// u32 LoadTexture(const char* texture);
+////// u32 LoadShader(const char* shader);
+
+
 s32 window_width = 1280;
 s32 window_height = 720;
 f32 aspect_ratio = 0.f;
@@ -44,6 +51,50 @@ static void DebugPrintToConsole(T var1, Types... var2)
   std::cout << var1;
   DebugPrintToConsole(var2...);
   std::cout << '\n';
+}
+
+std::string AssetPath(const char* filename)
+{
+  std::string prefix = "../../";
+  return prefix.append(filename);
+}
+
+std::string AssetPath(std::string path)
+{
+  std::string prefix = "../../";
+  return prefix.append(path);
+}
+
+/// Audio API Reference
+////// bool InitSound();
+////// bool LoadSound(const char* sound);
+////// bool PlaySound(const char* sound);
+////// bool StopSound(const char* sound);
+
+FMOD::System* audio_system;
+FMOD::Channel* audio_channels[4];   // audio system can play up to 4 sounds simultaneously
+
+bool InitSound()
+{
+  if (FMOD::System_Create(&audio_system) != FMOD_OK) return false;
+  if (audio_system->init(64, FMOD_INIT_NORMAL, 0)) return false;
+
+  return true;
+}
+
+bool LoadSound(const char* sound)
+{
+  return false;
+}
+
+bool PlaySound(const char* sound)
+{
+  return false;
+}
+
+bool StopSound(const char* sound)
+{
+  return false;
 }
 
 f32 GetRandomFloat()
@@ -384,21 +435,9 @@ public:
 f32 delta_time = 0.f;
 f32 last_frame = 0.f;
 
-std::string AssetPath(const char* filename)
-{
-  std::string prefix = "../../";
-  return prefix.append(filename);
-}
-
-std::string AssetPath(std::string path)
-{
-  std::string prefix = "../../";
-  return prefix.append(path);
-}
-
 u32 TextureFromFile(const char* filename, bool gamma = false)
 {
-  std::string filepath = AssetPath(filename);
+  std::string filepath = AssetPath("assets/textures/").append(filename);
 
   u32 texture_id;
   glGenTextures(1, &texture_id);
@@ -442,7 +481,7 @@ enum class SHADER_TYPE
 
 u32 CreateGLShader(const char* filename)
 {
-  std::string filepath = AssetPath(filename);
+  std::string filepath = AssetPath("assets/shaders/").append(filename);
   std::ifstream stream(filepath);
   std::string line;
   std::stringstream shader_streams[2];
@@ -638,9 +677,6 @@ namespace en
     }
   };
 }
-
-FMOD::System* audio_system;
-FMOD::Channel* audio_channels[4];   // audio system can play up to 4 sounds simultaneously
 
 en::vector<Entity> entities;
 en::vector<vec2> original_scales;
@@ -841,7 +877,7 @@ void LoadScene(const char* scene_path)
       s_path.erase(star, 1);
 
       FMOD::Sound* sound;
-      if (audio_system->createSound(AssetPath(s_path).c_str(), FMOD_DEFAULT | FMOD_LOOP_NORMAL, 0, &sound) == FMOD_OK)
+      if (audio_system->createSound(AssetPath("assets/audio/").append(s_path).c_str(), FMOD_DEFAULT | FMOD_LOOP_NORMAL, 0, &sound) == FMOD_OK)
       {
         DebugPrintToConsole("Successfully loaded audio asset: ", s_path);
         scene_sounds.PushBack(sound);
@@ -854,7 +890,7 @@ void LoadScene(const char* scene_path)
     else
     {
       FMOD::Sound* sound;
-      if (audio_system->createSound(AssetPath(s_path).c_str(), FMOD_DEFAULT, 0, &sound) == FMOD_OK)
+      if (audio_system->createSound(AssetPath("assets/audio/").append(s_path).c_str(), FMOD_DEFAULT, 0, &sound) == FMOD_OK)
       {
         DebugPrintToConsole("Successfully loaded audio asset: ", s_path);
         scene_sounds.PushBack(sound);
@@ -1020,6 +1056,7 @@ s32 main()
 {
   aspect_ratio = (f32)window_width / (f32)window_height;
   const char* glsl_version = "#version 330";
+
   GLFWwindow* window;
   
   glfwInit();
@@ -1058,8 +1095,10 @@ s32 main()
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init((char*)glGetString(GL_NUM_SHADING_LANGUAGE_VERSIONS));
 
-  FMOD::System_Create(&audio_system);
-  audio_system->init(64, FMOD_INIT_NORMAL, 0);
+  if (!InitSound())
+  {
+    DebugPrintToConsole("Error: Could not init sound!");
+  }
 
   StartTimer(game_timer);
 
@@ -1166,7 +1205,7 @@ s32 main()
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
 
-  LoadScene(AssetPath("test_scene.enscene").c_str());
+  LoadScene(AssetPath("assets/scenes/test_scene.enscene").c_str());
 
   while (application_active)
   {

@@ -12,7 +12,6 @@
 #include <chrono>
 #include <filesystem>
 #include <random>
-#include <unordered_map>
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_glfw.h"
@@ -24,12 +23,6 @@ using s32 = int32_t;
 using u32 = uint32_t;
 using f32  = float;
 using f64 = double;
-
-
-
-/// Graphics API Reference
-////// u32 LoadTexture(const char* texture);
-////// u32 LoadShader(const char* shader);
 
 
 s32 window_width = 1280;
@@ -55,24 +48,138 @@ static void DebugPrintToConsole(T var1, Types... var2)
 
 std::string AssetPath(const char* filename)
 {
-  std::string prefix = "../../";
+  std::string prefix = "../../assets/";
   return prefix.append(filename);
 }
 
 std::string AssetPath(std::string path)
 {
-  std::string prefix = "../../";
+  std::string prefix = "../../assets/";
   return prefix.append(path);
+}
+
+namespace en
+{
+  template <typename T>
+  class vector
+  {
+    T* data;
+    s32 capacity;
+    s32 size;
+
+  public:
+    vector<T>() : capacity(10), size(0) { data = new T[capacity]; }
+    vector<T>(s32 _size) : capacity(_size + 1), size(0) { data = new T[capacity]; }
+
+    T* begin() { return &data[0]; }
+    T* end() { return &data[size]; }
+
+    T& operator[](s32 index) { return data[index]; }
+
+    void Resize(s32 _size)
+    {
+      T* new_arr = new T[_size];
+
+      for (s32 i = 0; i < size; ++i) { new_arr[i] = data[i]; }
+      capacity = _size;
+
+      delete[] data;
+      data = nullptr;
+      data = new_arr;
+    }
+
+    void PushBack(T val)
+    {
+      if (size >= capacity) Resize(2 * capacity);
+
+      data[size] = val;
+      ++size;
+    }
+
+    void Clear()
+    {
+      en::vector<T> tmp_vec;
+      *this = tmp_vec;
+    }
+
+    s32 Size() const
+    {
+      return size;
+    }
+  };
+
+  template <typename T1, typename T2>
+  class unordered_map
+  {
+    s32 size = 0;
+    s32 find_index = -1;
+
+  public:
+    en::vector<T1> keys;
+    en::vector<T2> values;
+
+    unordered_map<T1, T2>() {}
+
+    void Insert(T1 key, T2 val)
+    {
+      keys.PushBack(key);
+      values.PushBack(val);
+      size++;
+    }
+
+    bool Find(T1 key)
+    {
+      bool found = false;
+
+      for (s32 i = 0; i < size; i++)
+      {
+        if (key == keys[i])
+        {
+          find_index = i;
+          found = true;
+          break;
+        }
+      }
+
+      return found;
+    }
+
+    T2 At(T1 key)
+    {
+      if (Find(key))
+      {
+        return values[find_index];
+      }
+
+      return T2();
+    }
+
+    s32 Size() const
+    {
+      return size;
+    }
+
+    void Clear()
+    {
+      keys.Clear();
+      values.Clear();
+
+      size = 0;
+      find_index = -1;
+    }
+  };
 }
 
 /// Audio API Reference
 ////// bool InitSound();
-////// bool LoadSound(const char* sound);
-////// bool PlaySound(const char* sound);
-////// bool StopSound(const char* sound);
+////// bool LoadSound(const char* path);
+////// bool PlaySound(const char* path);
+////// bool StopSound(const char* path);
 
 FMOD::System* audio_system;
 FMOD::Channel* audio_channels[4];   // audio system can play up to 4 sounds simultaneously
+
+en::unordered_map<std::string, FMOD::Sound*> scene_sounds;
 
 bool InitSound()
 {
@@ -82,19 +189,195 @@ bool InitSound()
   return true;
 }
 
-bool LoadSound(const char* sound)
+FMOD::Sound* LoadSound(const char* path, bool looping)
 {
-  return false;
+  FMOD::Sound* sound;
+  std::string sound_path = AssetPath("audio/").append(path);
+  if (looping)
+  {
+    if (audio_system->createSound(sound_path.c_str(), FMOD_DEFAULT | FMOD_LOOP_NORMAL, 0, &sound) == FMOD_OK)
+    {
+      DebugPrintToConsole("Successfully loaded audio asset: ", sound_path);
+      return sound;
+    }
+  }
+  else
+  {
+    if (audio_system->createSound(sound_path.c_str(), FMOD_DEFAULT, 0, &sound) == FMOD_OK)
+    {
+      DebugPrintToConsole("Successfully loaded audio asset: ", sound_path);
+      return sound;
+    }
+  }
+
+  return nullptr;
 }
+
+int audio_channels_in_use = 0;
 
 bool PlaySound(const char* sound)
 {
+  std::string sound_path = AssetPath("audio/").append(sound);
+  if (audio_system->playSound(scene_sounds.At(sound), nullptr, false, &audio_channels[audio_channels_in_use++]) == FMOD_OK)
+  {
+    return true;
+  }
+
+  DebugPrintToConsole("Failed to play sound!");
   return false;
 }
 
-bool StopSound(const char* sound)
+bool StopSound(const char* sound)           // TODO : write this function!
 {
   return false;
+}
+
+/// Graphics API Reference
+////// u32 LoadGLTexture(const char* texture);
+////// u32 LoadGLShader(const char* shader);
+
+en::unordered_map<std::string, u32> scene_textures;
+
+u32 LoadGLTexture(const char* texture)
+{
+  std::string filepath = AssetPath("textures/").append(texture);
+
+  u32 texture_id;
+  glGenTextures(1, &texture_id);
+
+  s32 width, height, nr_components;
+  unsigned char* data = stbi_load(filepath.c_str(), &width, &height, &nr_components, 0);
+  if (data)
+  {
+    GLenum format;
+    if (nr_components == 1)  format = GL_RED;
+    else if (nr_components == 3)  format = GL_RGB;
+    else if (nr_components == 4)  format = GL_RGBA;
+
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    stbi_image_free(data);
+    DebugPrintToConsole("Successfully loaded texture: ", filepath);
+  }
+  else
+  {
+    DebugPrintToConsole("Texture failed to load: ", filepath);
+    stbi_image_free(data);
+  }
+
+  return texture_id;
+}
+
+enum class SHADER_TYPE
+{
+  NONE = -1,
+  VERTEX,
+  FRAGMENT
+};
+
+en::unordered_map<std::string, u32> scene_shaders;
+
+u32 LoadGLShader(const char* shader)
+{
+  std::string filepath = AssetPath("shaders/").append(shader);
+  std::ifstream stream(filepath);
+  std::string line;
+  std::stringstream shader_streams[2];
+  SHADER_TYPE type = SHADER_TYPE::NONE;
+
+  while (std::getline(stream, line))
+  {
+    if (line.find("#shader") != std::string::npos)
+    {
+      if (line.find("vertex") != std::string::npos)
+      {
+        type = SHADER_TYPE::VERTEX;
+      }
+      else if (line.find("fragment") != std::string::npos)
+      {
+        type = SHADER_TYPE::FRAGMENT;
+      }
+      else
+      {
+        char error_type[128] = "Unsupported shader type: ";
+        strcat(error_type, line.c_str());
+        DebugPrintToConsole("Failed to load shader: ", filepath);
+        DebugPrintToConsole(error_type);
+      }
+    }
+    else
+    {
+      shader_streams[(s32)type] << line << '\n';
+    }
+  }
+
+  stream.close();
+
+  u32 vs = glCreateShader(GL_VERTEX_SHADER);
+  std::string vs_source_data = shader_streams[(s32)SHADER_TYPE::VERTEX].str();
+  const char* vs_source = vs_source_data.c_str();
+  glShaderSource(vs, 1, &vs_source, nullptr);
+  glCompileShader(vs);
+  s32 success = 0;
+  char log_info[512];
+  glGetShaderiv(vs, GL_COMPILE_STATUS, &success);
+
+  if (!success)
+  {
+    glGetShaderInfoLog(vs, 512, nullptr, log_info);
+    DebugPrintToConsole("Failed to load shader: ", filepath);
+    DebugPrintToConsole(log_info);
+
+    return 9999;
+  }
+
+  u32 fs = glCreateShader(GL_FRAGMENT_SHADER);
+  std::string fs_source_data = shader_streams[(s32)SHADER_TYPE::FRAGMENT].str();
+  const char* fs_source = fs_source_data.c_str();
+  glShaderSource(fs, 1, &fs_source, nullptr);
+  glCompileShader(fs);
+  glGetShaderiv(fs, GL_COMPILE_STATUS, &success);
+
+  if (!success)
+  {
+    glGetShaderInfoLog(fs, 512, nullptr, log_info);
+    DebugPrintToConsole("Failed to load shader: ", filepath);
+    DebugPrintToConsole(log_info);
+
+    return 9999;
+  }
+
+  u32 program = glCreateProgram();
+  glAttachShader(program, vs);
+  glAttachShader(program, fs);
+  glLinkProgram(program);
+  glGetProgramiv(program, GL_LINK_STATUS, &success);
+
+  if (!success)
+  {
+    glGetProgramInfoLog(program, 512, nullptr, log_info);
+    DebugPrintToConsole("Failed to load shader: ", filepath);
+    DebugPrintToConsole(log_info);
+
+    return 9999;
+  }
+
+  glUseProgram(program);
+  glDeleteShader(vs);
+  glDeleteShader(fs);
+  shader_streams[0].str("");
+  shader_streams[1].str("");
+
+  DebugPrintToConsole("Successfully loaded shader: ", filepath);
+  
+  return program;
 }
 
 f32 GetRandomFloat()
@@ -435,254 +718,8 @@ public:
 f32 delta_time = 0.f;
 f32 last_frame = 0.f;
 
-u32 TextureFromFile(const char* filename, bool gamma = false)
-{
-  std::string filepath = AssetPath("assets/textures/").append(filename);
-
-  u32 texture_id;
-  glGenTextures(1, &texture_id);
-
-  s32 width, height, nr_components;
-  unsigned char* data = stbi_load(filepath.c_str(), &width, &height, &nr_components, 0);
-  if (data)
-  {
-    GLenum format;
-    if (nr_components == 1)  format = GL_RED;
-    else if (nr_components == 3)  format = GL_RGB;
-    else if (nr_components == 4)  format = GL_RGBA;
-
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    stbi_image_free(data);
-    DebugPrintToConsole("Successfully loaded texture: ", filepath);
-  }
-  else
-  {
-    DebugPrintToConsole("Texture failed to load: ", filepath);
-    stbi_image_free(data);
-  }
-
-  return texture_id;
-}
-
-enum class SHADER_TYPE
-{
-  NONE = -1,
-  VERTEX,
-  FRAGMENT
-};
-
-u32 CreateGLShader(const char* filename)
-{
-  std::string filepath = AssetPath("assets/shaders/").append(filename);
-  std::ifstream stream(filepath);
-  std::string line;
-  std::stringstream shader_streams[2];
-  SHADER_TYPE type = SHADER_TYPE::NONE;
-
-  while (std::getline(stream, line))
-  {
-    if (line.find("#shader") != std::string::npos)
-    {
-      if (line.find("vertex") != std::string::npos)
-      {
-        type = SHADER_TYPE::VERTEX;
-      }
-      else if (line.find("fragment") != std::string::npos)
-      {
-        type = SHADER_TYPE::FRAGMENT;
-      }
-      else
-      {
-        char error_type[128] = "Unsupported shader type: ";
-        strcat(error_type, line.c_str());
-        DebugPrintToConsole("Failed to load shader: ", filepath);
-        DebugPrintToConsole(error_type);
-      }
-    }
-    else
-    {
-      shader_streams[(s32)type] << line << '\n';
-    }
-  }
-
-  stream.close();
-
-  u32 vs = glCreateShader(GL_VERTEX_SHADER);
-  std::string vs_source_data = shader_streams[(s32)SHADER_TYPE::VERTEX].str();
-  const char* vs_source = vs_source_data.c_str();
-  glShaderSource(vs, 1, &vs_source, nullptr);
-  glCompileShader(vs);
-  s32 success = 0;
-  char log_info[512];
-  glGetShaderiv(vs, GL_COMPILE_STATUS, &success);
-
-  if (!success)
-  {
-    glGetShaderInfoLog(vs, 512, nullptr, log_info);
-    DebugPrintToConsole("Failed to load shader: ", filepath);
-    DebugPrintToConsole(log_info);
-
-    return 9999;
-  }
-
-  u32 fs = glCreateShader(GL_FRAGMENT_SHADER);
-  std::string fs_source_data = shader_streams[(s32)SHADER_TYPE::FRAGMENT].str();
-  const char* fs_source = fs_source_data.c_str();
-  glShaderSource(fs, 1, &fs_source, nullptr);
-  glCompileShader(fs);
-  glGetShaderiv(fs, GL_COMPILE_STATUS, &success);
-
-  if (!success)
-  {
-    glGetShaderInfoLog(fs, 512, nullptr, log_info);
-    DebugPrintToConsole("Failed to load shader: ", filepath);
-    DebugPrintToConsole(log_info);
-
-    return 9999;
-  }
-
-  u32 program = glCreateProgram();
-  glAttachShader(program, vs);
-  glAttachShader(program, fs);
-  glLinkProgram(program);
-  glGetProgramiv(program, GL_LINK_STATUS, &success);
-
-  if (!success)
-  {
-    glGetProgramInfoLog(program, 512, nullptr, log_info);
-    DebugPrintToConsole("Failed to load shader: ", filepath);
-    DebugPrintToConsole(log_info);
-
-    return 9999;
-  }
-
-  glUseProgram(program);
-  glDeleteShader(vs);
-  glDeleteShader(fs);
-  shader_streams[0].str("");
-  shader_streams[1].str("");
-
-  DebugPrintToConsole("Successfully loaded shader: ", filepath);
-  
-  return program;
-}
-
-namespace en
-{
-  template <typename T>
-  class vector
-  {
-    T* data;
-    s32 capacity;
-    s32 size;
-
-  public:
-    vector<T>() : capacity(10), size(0) { data = new T[capacity]; }
-    vector<T>(s32 _size) : capacity(_size + 1), size(0) { data = new T[capacity]; }
-
-    T* begin() { return &data[0]; }
-    T* end() { return &data[size]; }
-
-    T& operator[](s32 index) { return data[index]; }
-
-    void Resize(s32 _size)
-    {
-      T* new_arr = new T[_size];
-
-      for (s32 i = 0; i < size; ++i) { new_arr[i] = data[i]; }
-      capacity = _size;
-
-      delete[] data;
-      data = nullptr;
-      data = new_arr;
-    }
-
-    void PushBack(T val)
-    {
-      if (size >= capacity) Resize(2 * capacity);
-
-      data[size] = val;
-      ++size;
-    }
-
-    void Clear()
-    {
-      en::vector<T> tmp_vec;
-      *this = tmp_vec;
-    }
-
-    s32 Size() const
-    {
-      return size;
-    }
-  };
-
-  template <typename T1, typename T2>
-  class unordered_map
-  {
-    s32 size = 0;
-    s32 find_index = -1;
-
-  public:
-    en::vector<T1> keys;
-    en::vector<T2> values;
-
-    unordered_map<T1, T2>() {}
-
-    void Insert(T1 key, T2 val)
-    {
-      keys.PushBack(key);
-      values.PushBack(val);
-      size++;
-    }
-
-    bool Find(T1 key)
-    {
-      bool found = false;
-
-      for (s32 i = 0; i < size; i++)
-      {
-        if (key == keys[i])
-        {
-          find_index = i;
-          found = true;
-          break;
-        }
-      }
-
-      return found;
-    }
-
-    T2& At(T1 key)
-    {
-      if (Find(key))
-      {
-        return values[find_index];
-      }
-
-      return T2();
-    }
-
-    s32 Size() const
-    {
-      return size;
-    }
-  };
-}
-
 en::vector<Entity> entities;
 en::vector<vec2> original_scales;
-en::vector<u32> scene_shaders;
-en::vector<u32> scene_textures;
-en::vector<FMOD::Sound*> scene_sounds;
 
 enum class BUTTON_ACTION
 {
@@ -828,7 +865,8 @@ void LoadScene(const char* scene_path)
   scene_textures.Clear();
   scene_sounds.Clear();
 
-  std::ifstream scene_stream(scene_path);
+  std::string path = AssetPath("scenes/").append(scene_path);
+  std::ifstream scene_stream(path);
 
   std::string line;
 
@@ -859,13 +897,15 @@ void LoadScene(const char* scene_path)
   for (const auto& s : scene_shader_names)
   {
     std::string s_path = s;
-    scene_shaders.PushBack(CreateGLShader(s_path.c_str()));
+    u32 shader = LoadGLShader(s_path.c_str());
+    scene_shaders.Insert(s_path, shader);
   }
 
   for (const auto& t : scene_texture_names)
   {
     std::string t_path = t;
-    scene_textures.PushBack(TextureFromFile(t_path.c_str()));
+    u32 texture = LoadGLTexture(t_path.c_str());
+    scene_textures.Insert(t_path, texture);
   }
 
   for (const auto& s : scene_sound_names)
@@ -876,28 +916,18 @@ void LoadScene(const char* scene_path)
       auto star = s_path.find("*");
       s_path.erase(star, 1);
 
-      FMOD::Sound* sound;
-      if (audio_system->createSound(AssetPath("assets/audio/").append(s_path).c_str(), FMOD_DEFAULT | FMOD_LOOP_NORMAL, 0, &sound) == FMOD_OK)
+      FMOD::Sound* sound = LoadSound(s_path.c_str(), true);
+      if (sound != nullptr)
       {
-        DebugPrintToConsole("Successfully loaded audio asset: ", s_path);
-        scene_sounds.PushBack(sound);
-      }
-      else
-      {
-        DebugPrintToConsole("Failed to load audio asset: ", s_path);
+        scene_sounds.Insert(s_path, sound);
       }
     }
     else
     {
-      FMOD::Sound* sound;
-      if (audio_system->createSound(AssetPath("assets/audio/").append(s_path).c_str(), FMOD_DEFAULT, 0, &sound) == FMOD_OK)
+      FMOD::Sound* sound = LoadSound(s_path.c_str(), false);
+      if (sound != nullptr)
       {
-        DebugPrintToConsole("Successfully loaded audio asset: ", s_path);
-        scene_sounds.PushBack(sound);
-      }
-      else
-      {
-        DebugPrintToConsole("Failed to load audio asset: ", s_path);
+        scene_sounds.Insert(s_path, sound);
       }
     }
   }
@@ -912,12 +942,12 @@ void LoadScene(const char* scene_path)
 
       auto comma = new_line.find(",");
       auto val_str = new_line.substr(0, comma);
-      e.shader = scene_shaders[std::stoi(val_str)];
+      e.shader = scene_shaders.At(scene_shader_names[std::stoi(val_str)]);
 
       new_line = new_line.substr(comma + 2);
       comma = new_line.find(",");
       val_str = new_line.substr(0, comma);
-      e.texture = scene_textures[std::stoi(val_str)];
+      e.texture = scene_textures.At(scene_texture_names[std::stoi(val_str)]);
 
       new_line = new_line.substr(comma + 2);
       comma = new_line.find(",");
@@ -982,7 +1012,7 @@ void CloseWindow()
 
 void Hit()
 {
-  audio_system->playSound(scene_sounds[1], nullptr, false, &audio_channels[1]);
+  PlaySound("Hit.wav");
 }
 
 enum class ANIM_STATE
@@ -1108,17 +1138,17 @@ s32 main()
   SetKeyboardInput(RunRight, GLFW_KEY_D, BUTTON_ACTION::HOLD);
   SetKeyboardInput(RunLeft, GLFW_KEY_A, BUTTON_ACTION::HOLD);
 
-  particle_textures[0] = TextureFromFile("cloud0.png");
-  particle_textures[1] = TextureFromFile("cloud1.png");
-  particle_textures[2] = TextureFromFile("cloud2.png");
-  particle_textures[3] = TextureFromFile("cloud3.png");
-  particle_textures[4] = TextureFromFile("cloud4.png");
+  particle_textures[0] = LoadGLTexture("cloud0.png");
+  particle_textures[1] = LoadGLTexture("cloud1.png");
+  particle_textures[2] = LoadGLTexture("cloud2.png");
+  particle_textures[3] = LoadGLTexture("cloud3.png");
+  particle_textures[4] = LoadGLTexture("cloud4.png");
 
   Entity megaman;
   megaman.position = vec2(0.75f, 0.75f);
   megaman.scale = vec2(0.25f, 0.25f * aspect_ratio);
-  megaman.shader = CreateGLShader("entity_animated.glsl");
-  megaman.texture = TextureFromFile("megaman_run.jpg");
+  megaman.shader = LoadGLShader("entity_animated.glsl");
+  megaman.texture = LoadGLTexture("megaman_run.jpg");
   megaman.angle = 0.f;
   glGenVertexArrays(1, &megaman.vao);
   glGenBuffers(1, &megaman.vbo);
@@ -1140,7 +1170,7 @@ s32 main()
   //Entity cloud;
   //cloud.position = vec2(0.85f, -0.85f);
   //cloud.scale = vec2(0.25f, 0.25f * aspect_ratio);
-  //cloud.shader = CreateGLShader("entity_textured.glsl");
+  //cloud.shader = LoadGLShader("entity_textured.glsl");
   //cloud.texture = TextureFromFile("cloud0.png");
   //cloud.angle = 0.f;
   //glGenVertexArrays(1, &cloud.vao);
@@ -1162,7 +1192,7 @@ s32 main()
   en::vector<ParticleVertex> particle_verts;
   en::vector<u32> particle_indices;
 
-  s32 particle_shader = CreateGLShader("particle_textured.glsl");
+  s32 particle_shader = LoadGLShader("particle_textured.glsl");
   glUseProgram(particle_shader);
   s32 samplers[5] = { 0, 1, 2, 3, 4 };
   glUniform1iv(glGetUniformLocation(particle_shader, "textures"), 5, samplers);
@@ -1205,7 +1235,8 @@ s32 main()
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
 
-  LoadScene(AssetPath("assets/scenes/test_scene.enscene").c_str());
+  LoadScene("test_scene.enscene");
+  PlaySound("MainTheme.wav");
 
   while (application_active)
   {

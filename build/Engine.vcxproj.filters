@@ -30,7 +30,28 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="C:\2D-Engine\src\Animation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\2D-Engine\src\Audio.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="C:\2D-Engine\src\Core.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\2D-Engine\src\Entity.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\2D-Engine\src\GLGraphics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\2D-Engine\src\Input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\2D-Engine\src\Particles.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\2D-Engine\src\Scene.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\2D-Engine\src\Timer.h">

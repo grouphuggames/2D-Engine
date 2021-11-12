@@ -9,7 +9,7 @@ The output was:
 Microsoft (R) Build Engine version 16.10.0+4242f381a for .NET Framework
 Copyright (C) Microsoft Corporation. All rights reserved.
 
-Build started 11/10/2021 4:30:10 PM.
+Build started 11/11/2021 6:20:11 PM.
 Project "C:\2D-Engine\build\CMakeFiles\3.20.0-rc5\CompilerIdC\CompilerIdC.vcxproj" on node 1 (default targets).
 PrepareForBuild:
   Creating directory "Debug\".
@@ -54,7 +54,7 @@ The output was:
 Microsoft (R) Build Engine version 16.10.0+4242f381a for .NET Framework
 Copyright (C) Microsoft Corporation. All rights reserved.
 
-Build started 11/10/2021 4:30:11 PM.
+Build started 11/11/2021 6:20:12 PM.
 Project "C:\2D-Engine\build\CMakeFiles\3.20.0-rc5\CompilerIdCXX\CompilerIdCXX.vcxproj" on node 1 (default targets).
 PrepareForBuild:
   Creating directory "Debug\".
@@ -92,28 +92,28 @@ The CXX compiler identification is MSVC, found in "C:/2D-Engine/build/CMakeFiles
 Detecting C compiler ABI info compiled with the following output:
 Change Dir: C:/2D-Engine/build/CMakeFiles/CMakeTmp
 
-Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/MSBuild/Current/Bin/MSBuild.exe cmTC_4a070.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=16.0 /v:m && Microsoft (R) Build Engine version 16.10.0+4242f381a for .NET Framework
+Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/MSBuild/Current/Bin/MSBuild.exe cmTC_95030.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=16.0 /v:m && Microsoft (R) Build Engine version 16.10.0+4242f381a for .NET Framework
 Copyright (C) Microsoft Corporation. All rights reserved.
 
   Microsoft (R) C/C++ Optimizing Compiler Version 19.29.30037 for x64
   Copyright (C) Microsoft Corporation.  All rights reserved.
   CMakeCCompilerABI.c
-  cl /c /Zi /W3 /WX- /diagnostics:column /Od /Ob0 /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\"Debug\"" /D _MBCS /Gm- /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /Fo"cmTC_4a070.dir\Debug\\" /Fd"cmTC_4a070.dir\Debug\vc142.pdb" /external:env:EXTERNAL_INCLUDE /external:W3 /Gd /TC /errorReport:queue "C:\Program Files\CMake\share\cmake-3.20\Modules\CMakeCCompilerABI.c"
-  cmTC_4a070.vcxproj -> C:\2D-Engine\build\CMakeFiles\CMakeTmp\Debug\cmTC_4a070.exe
+  cl /c /Zi /W3 /WX- /diagnostics:column /Od /Ob0 /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\"Debug\"" /D _MBCS /Gm- /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /Fo"cmTC_95030.dir\Debug\\" /Fd"cmTC_95030.dir\Debug\vc142.pdb" /external:env:EXTERNAL_INCLUDE /external:W3 /Gd /TC /errorReport:queue "C:\Program Files\CMake\share\cmake-3.20\Modules\CMakeCCompilerABI.c"
+  cmTC_95030.vcxproj -> C:\2D-Engine\build\CMakeFiles\CMakeTmp\Debug\cmTC_95030.exe
 
 
 
 Detecting CXX compiler ABI info compiled with the following output:
 Change Dir: C:/2D-Engine/build/CMakeFiles/CMakeTmp
 
-Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/MSBuild/Current/Bin/MSBuild.exe cmTC_21eb1.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=16.0 /v:m && Microsoft (R) Build Engine version 16.10.0+4242f381a for .NET Framework
+Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/MSBuild/Current/Bin/MSBuild.exe cmTC_3a3cd.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=16.0 /v:m && Microsoft (R) Build Engine version 16.10.0+4242f381a for .NET Framework
 Copyright (C) Microsoft Corporation. All rights reserved.
 
   Microsoft (R) C/C++ Optimizing Compiler Version 19.29.30037 for x64
   Copyright (C) Microsoft Corporation.  All rights reserved.
   CMakeCXXCompilerABI.cpp
-  cl /c /Zi /W3 /WX- /diagnostics:column /Od /Ob0 /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\"Debug\"" /D _MBCS /Gm- /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /GR /Fo"cmTC_21eb1.dir\Debug\\" /Fd"cmTC_21eb1.dir\Debug\vc142.pdb" /external:env:EXTERNAL_INCLUDE /external:W3 /Gd /TP /errorReport:queue "C:\Program Files\CMake\share\cmake-3.20\Modules\CMakeCXXCompilerABI.cpp"
-  cmTC_21eb1.vcxproj -> C:\2D-Engine\build\CMakeFiles\CMakeTmp\Debug\cmTC_21eb1.exe
+  cl /c /Zi /W3 /WX- /diagnostics:column /Od /Ob0 /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\"Debug\"" /D _MBCS /Gm- /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /GR /Fo"cmTC_3a3cd.dir\Debug\\" /Fd"cmTC_3a3cd.dir\Debug\vc142.pdb" /external:env:EXTERNAL_INCLUDE /external:W3 /Gd /TP /errorReport:queue "C:\Program Files\CMake\share\cmake-3.20\Modules\CMakeCXXCompilerABI.cpp"
+  cmTC_3a3cd.vcxproj -> C:\2D-Engine\build\CMakeFiles\CMakeTmp\Debug\cmTC_3a3cd.exe
 
 
 

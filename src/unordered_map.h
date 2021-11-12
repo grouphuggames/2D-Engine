@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Core.h"
+#include "vector.h"
+
 
 namespace en
 {

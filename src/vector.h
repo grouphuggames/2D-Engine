@@ -2,6 +2,7 @@
 
 #include "Core.h"
 
+
 namespace en
 {
   template <typename T>

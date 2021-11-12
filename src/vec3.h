@@ -2,6 +2,7 @@
 
 #include "Core.h"
 
+
 struct vec3
 {
   f32 data[3];

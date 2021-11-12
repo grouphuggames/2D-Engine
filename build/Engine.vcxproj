@@ -357,7 +357,14 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="C:\2D-Engine\src\Animation.h" />
+    <ClInclude Include="C:\2D-Engine\src\Audio.h" />
     <ClInclude Include="C:\2D-Engine\src\Core.h" />
+    <ClInclude Include="C:\2D-Engine\src\Entity.h" />
+    <ClInclude Include="C:\2D-Engine\src\GLGraphics.h" />
+    <ClInclude Include="C:\2D-Engine\src\Input.h" />
+    <ClInclude Include="C:\2D-Engine\src\Particles.h" />
+    <ClInclude Include="C:\2D-Engine\src\Scene.h" />
     <ClInclude Include="C:\2D-Engine\src\Timer.h" />
     <ClInclude Include="C:\2D-Engine\src\fmod\fmod.h" />
     <ClInclude Include="C:\2D-Engine\src\fmod\fmod_codec.h" />
